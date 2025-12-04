@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/03 23:14:01 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/04 00:40:58 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/04 01:58:18 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -51,7 +51,7 @@ int main(int argc, char **argv)
 
     // Открываем файл для логирования событий сервера
     // std::ios::app означает, что все записи будут добавляться в конец файла
-    std::ofstream log("server.log", std::ios::app);
+    std::ofstream log("logs/server.log", std::ios::app);
     if (!log.is_open())
     {
         std::cerr << "Failed to open log file\n";

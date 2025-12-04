@@ -6,7 +6,7 @@
 #    By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2025/12/03 23:58:28 by aokhapki          #+#    #+#              #
-#    Updated: 2025/12/04 00:10:05 by aokhapki         ###   ########.fr        #
+#    Updated: 2025/12/04 01:56:42 by aokhapki         ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -16,18 +16,18 @@
 CXX = g++
 CXXFLAGS = -std=c++17 -Wall -Wextra -Werror
 TARGET = ircserv
-OBJS = server/server.o server/main.o
+OBJS = server.o main.o
 
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS)
 
-server/server.o: server/server.cpp server/server.hpp
-	$(CXX) $(CXXFLAGS) -c server/server.cpp -o server/server.o
+server.o: server.cpp server.hpp
+	$(CXX) $(CXXFLAGS) -c server.cpp -o server.o
 
-server/main.o: server/main.cpp server/server.hpp
-	$(CXX) $(CXXFLAGS) -c server/main.cpp -o server/main.o
+main.o: main.cpp server.hpp
+	$(CXX) $(CXXFLAGS) -c main.cpp -o main.o
 
 clean:
 	rm -f $(OBJS)
