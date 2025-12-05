@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/03 23:14:10 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/06 00:01:56 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/06 00:26:06 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -22,8 +22,7 @@
 /**
  * Класс Server — объект, который должен быть: только один, не копируемый, не перемещаемый. Значит:
  * Default constructor — forbidden (we have custom constructor)
- * Copy constructor — forbidden
- * Copy assignment — forbidden
+ * Copy constructor and assignment operator — forbidden
  */
 
 class Server
