@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/03 23:14:01 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/05 23:55:59 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/06 00:23:06 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -42,6 +42,8 @@ Server::Server(const char* port_str, const char* password) : m_listen_fd(-1), m_
 Код предназначен как обучающий пример: аккуратно логирует события и показывает
 базовую архитектуру для дальнейшего расширения (epoll, буферы, парсер IRC и т.д.).
  */
+
+ //TODO refactor and use in initSocket
 int set_non_blocking(int fd)
 {
 	int flags;
