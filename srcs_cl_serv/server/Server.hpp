@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/03 23:14:10 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/06 20:34:44 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/06 22:42:27 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -37,8 +37,8 @@ class Server
 
 	void initSocket(const std::string &port);
 	// обработка событий
-	void acceptСlient();
-	void receivData(int fd);
+	void acceptClient();
+	void receiveData(int fd);
 	void disconnectClient(int fd);
 
 	public:
