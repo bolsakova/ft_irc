@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/03 23:14:01 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/06 21:51:03 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/06 22:00:15 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -197,12 +197,14 @@ void Server::receivData(int fd)
         std::cerr << "recv() failed on fd " << fd << ": "
                   << std::strerror(errno) << std::endl;
         close(fd); // TODO disconnectClient(fd);
+        close(fd); // TODO disconnectClient(fd);
         return;
     }
     if (bytes_read == 0)
     {
         // 0 байт → клиент аккуратно закрыл соединение (EOF)
         std::cout << "Client fd " << fd << " disconnected (EOF)" << std::endl;
+        close(fd); // TODO disconnectClient(fd);
         close(fd); // TODO disconnectClient(fd);
         return;
     }
@@ -245,6 +247,7 @@ void Server::receivData(int fd)
             {
                 std::cerr << "send() failed on fd " << fd << ": "
                           << std::strerror(errno) << std::endl;
+                close(fd); // TODO disconnectClient(fd);
                 close(fd); // TODO disconnectClient(fd);
                 return;
             }
