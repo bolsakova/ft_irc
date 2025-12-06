@@ -1,12 +1,12 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   server.cpp                                         :+:      :+:    :+:   */
+/*   Server.cpp                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/03 23:14:01 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/06 00:23:06 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/06 09:12:38 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -19,21 +19,19 @@
 #include <unistd.h>       // close, read, write
 #include <cstring>        // strerror, memset
 #include <iostream>       // cout, cerr
-#include <cerrno>         // errno
+#include <cerrno> 
 
-
-
-Server::Server(const char* port_str, const char* password) : m_listen_fd(-1), m_password_(password)
+Server::Server(const std::string& port, const std::string& password)
+	: m_listen_fd(-1), m_password(password)
 {
 
-	listen_fd_ = create_and_bind(port_str);
-	if (listen_fd_ < 0)
+	initSocket(port);
+	if (m_listen_fd < 0)
 	{
-		throw std::runtime_error("Failed to create and bind listening socket");
+		std::cerr << "Failed to initialise socket on port " << port << "\n";
+		return;
 	}
-	std::cout << "Server started on port " << port_str << std::endl;{
-		init
-	}
+	std::cout << "Server started on port " << port << std::endl;
 }
 /**
  * 
