@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/03 23:14:10 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/06 09:00:47 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/06 20:34:44 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,10 +16,10 @@
 
 #include <string>
 #include <vector>
-#include <unordered_map>
+// #include <unordered_map>
 #include <map>
 #include <sys/poll.h>
-#include "Client.hpp"
+#include "../client/Client.hpp"
 
 /**
  * Класс Server — объект, который должен быть: только один, не копируемый, не перемещаемый. Значит:
@@ -32,12 +32,10 @@ class Server
 	private:
 	int m_listen_fd;
 	std::string m_password;
-	std::vector<pollfd> m_poll_fds;
-	std::map<int, Client> m_clients;
+	std::vector<pollfd> m_poll_fds; // все дескрипторы, которые отслеживает poll()
+	std::map<int, Client *> m_clients; // fd -> Client*, так как Client некопируемый, статус клиента дб единственным и уникальным
 
-	// инициация сокета
 	void initSocket(const std::string &port);
-
 	// обработка событий
 	void acceptСlient();
 	void receivData(int fd);
