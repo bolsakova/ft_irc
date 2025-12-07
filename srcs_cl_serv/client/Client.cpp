@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/05 17:44:59 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/06 09:39:29 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/07 18:06:12 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -26,16 +26,19 @@ void Client::appendToInBuf(const std::string &data)
 }
 bool Client::hasCompleteCmd() const
 {
-	return m_inbuf.find("\r\n") != std::string::npos;
+	return m_inbuf.find('\n') != std::string::npos;
 }
 
 std::string Client::extractNextCmd()
 {
-	size_t pos = m_inbuf.find("\r\n");
+	size_t pos = m_inbuf.find('\n');
 	if (pos == std::string::npos)
 		return "";
-
+	// Берем все до \n
 	std::string cmd = m_inbuf.substr(0, pos);
+	//усли перед \n стоит \r, удаляем его
+	if (pos > 0 && cmd[pos - 1] == '\r')
+		cmd.erase(pos - 1, 1);			
 	m_inbuf.erase(0, pos + 2); // +2 to remove \r\n
 	return cmd;
 }
