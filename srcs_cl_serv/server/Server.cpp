@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/03 23:14:01 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/07 00:46:34 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/07 01:16:46 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -197,24 +197,26 @@ void Server::acceptClient()
 }
 void Server::disconnectClient(int fd)
 {
-	// Удаляем клиента из m_clients и закрываем сокет
-	std::map<int, Client *>::iterator it = m_clients.find(fd);
-	if (it != m_clients.end())
-	{
-		Client *client = it->second;
-		delete client; // освобождаем память
-		m_clients.erase(it);
-	}
-	close(fd); // закрываем сокет
-	// Удаляем из m_poll_fds
-	for (size_t i = 0; i < m_poll_fds.size(); ++i)
-	{
-		if (m_poll_fds[i].fd == fd)
-		{
-			m_poll_fds.erase(m_poll_fds.begin() + i);
-			break;
-		}
-	}
+	// 1. Close socket first
+    if (fd >= 0)
+        close(fd);
+
+    // 2. Remove Client object
+    auto it = m_clients.find(fd);
+    if (it != m_clients.end())
+    {
+        delete it->second;
+        m_clients.erase(it);
+    }
+    // 3. Remove fd from poll fds
+    for (size_t i = 0; i < m_poll_fds.size(); ++i)
+    {
+        if (m_poll_fds[i].fd == fd)
+        {
+            m_poll_fds.erase(m_poll_fds.begin() + i);
+            break;
+        }
+    }
 	std::cout << "Client fd " << fd << " disconnected and removed." << std::endl;
 }
 
@@ -317,10 +319,14 @@ void Server::run()
 			// Любая другая ошибка — считаем фатальной
 			throw std::runtime_error("poll() failed: " + std::string(strerror(errno)));
 		}
+		if (m_poll_fds.empty())
+    		continue;
 		// 3. Проходим по всем отслеживаемым дескрипторам и смотрим, у кого есть события
 		// ВАЖНО: мы читаем fd и revents в локальные переменные, потому что
 		// внутри цикла можем вызывать disconnectClient(), который изменит m_poll_fds.
-		for (size_t i = 0; i < m_poll_fds.size(); ++i)
+		// for (size_t i = 0; i < m_poll_fds.size(); ++i) переписала, чтобы начинать обход с конца вектора для корректного удаления элементов внутри цикла
+		for (int i = static_cast<int>(m_poll_fds.size()) - 1; i >= 0; --i)// int i вместо size_t, чтобы избежать предупреждений компилятора при сравнении с ssize_t
+
 		{
 			int fd = m_poll_fds[i].fd;
 			short revents = m_poll_fds[i].revents;
