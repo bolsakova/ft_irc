@@ -6,28 +6,28 @@
 #    By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2025/12/03 23:58:28 by aokhapki          #+#    #+#              #
-#    Updated: 2025/12/04 01:56:42 by aokhapki         ###   ########.fr        #
+#    Updated: 2025/12/07 00:55:27 by aokhapki         ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
 
 # Makefile для тестирования IRC сервера
-
 CXX = g++
 CXXFLAGS = -std=c++17 -Wall -Wextra -Werror
+
 TARGET = ircserv
-OBJS = server.o main.o
+
+SRCS = main.cpp server/Server.cpp client/Client.cpp
+
+OBJS = $(SRCS:.cpp=.o)
 
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS)
 
-server.o: server.cpp server.hpp
-	$(CXX) $(CXXFLAGS) -c server.cpp -o server.o
-
-main.o: main.cpp server.hpp
-	$(CXX) $(CXXFLAGS) -c main.cpp -o main.o
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
 	rm -f $(OBJS)
@@ -38,4 +38,5 @@ fclean: clean
 re: fclean all
 
 .PHONY: all clean fclean re
+
 
