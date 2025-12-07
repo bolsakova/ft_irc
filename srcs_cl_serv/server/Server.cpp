@@ -6,12 +6,11 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/03 23:14:01 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/06 22:42:47 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/07 00:46:34 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "Server.hpp"
-#include "../client/Client.hpp"
 #include <sys/socket.h>   // socket, bind, listen, accept
 #include <netinet/in.h>   // sockaddr_in, htons
 #include <arpa/inet.h>    // inet_ntoa (если нужно)
@@ -46,9 +45,27 @@ Server::Server(const std::string& port, const std::string& password)
 	}
 	std::cout << "Server started on port " << port << std::endl;
 }
-//TODO: implement
-Server::~Server() {}
 
+Server::~Server()
+{
+	// 1. Close the listening socket if it's open
+	if (m_listen_fd >= 0)
+		close(m_listen_fd);
+	// 2. Close all client sockets and free memory
+	for (std::map<int, Client *>::iterator it = m_clients.begin();
+		 it != m_clients.end(); ++it)
+	{
+		int fd = it->first;
+		Client *client = it->second;
+		if (fd >= 0)
+			close(fd);   // close the socket itself
+		delete client;   // free the object
+	}
+	// 3. Clear structures
+	m_clients.clear();
+	m_poll_fds.clear();
+	std::cout << "Server destroyed: all sockets closed, all clients removed." << std::endl;
+}
 
 int set_non_blocking(int fd)
 {
@@ -138,127 +155,146 @@ socklen_t - POSIX определяет универсальный и перен�
 
 void Server::acceptClient()
 {
-    while (true)
-    {
-        sockaddr_in client_addr;
-        socklen_t   addr_len = sizeof(client_addr);
+	while (true)
+	{
+		sockaddr_in client_addr;
+		socklen_t   addr_len = sizeof(client_addr);
 
 // accept() забирает одно входящее подключение из очереди
 // accept хочет sockaddr*, у нас sockaddr_in, поэтому явно приводим 
 // &client_addr к sockaddr*, чтобы передать IPv4‑структуру туда, где ожидается базовый адрес.
-        int client_fd = accept(m_listen_fd,
-                               reinterpret_cast<sockaddr*>(&client_addr),
-                               &addr_len);
-        if (client_fd < 0)
-        {
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-                break;
-            // Любая другая ошибка — просто логируем и выходим из acceptClient
-            std::cerr << "accept() failed: " << std::strerror(errno) << std::endl;
-            break;
-        }
-        // Делаем клиентский сокет неблокирующим
-        if (set_non_blocking(client_fd) < 0)
-        {
-            std::cerr << "set_non_blocking() failed for client fd "
-                      << client_fd << ": " << std::strerror(errno) << std::endl;
-            close(client_fd);
-            continue; // пробуем принять следующего клиента
-        }
-        // Добавляем клиентский сокет в poll()
-        pollfd client_pfd;
-        client_pfd.fd      = client_fd;
-        client_pfd.events  = POLLIN; // хотим читать данные от клиента
-        client_pfd.revents = 0;
-        m_poll_fds.push_back(client_pfd);
-        // Создаем объект Client и сохраняем указатель в m_clients
-        Client *client = new Client(client_fd);
-        m_clients[client_fd] = client;
-        // Лог/отладка
-        std::cout << "New client accepted, fd = " << client_fd << std::endl;
-    }
+		int client_fd = accept(m_listen_fd,
+							   reinterpret_cast<sockaddr*>(&client_addr),
+							   &addr_len);
+		if (client_fd < 0)
+		{
+			if (errno == EAGAIN || errno == EWOULDBLOCK)
+				break;
+			// Любая другая ошибка — просто логируем и выходим из acceptClient
+			std::cerr << "accept() failed: " << std::strerror(errno) << std::endl;
+			break;
+		}
+		// Делаем клиентский сокет неблокирующим
+		if (set_non_blocking(client_fd) < 0)
+		{
+			std::cerr << "set_non_blocking() failed for client fd "
+					  << client_fd << ": " << std::strerror(errno) << std::endl;
+			close(client_fd);
+			continue; // пробуем принять следующего клиента
+		}
+		// Добавляем клиентский сокет в poll()
+		pollfd client_pfd;
+		client_pfd.fd      = client_fd;
+		client_pfd.events  = POLLIN; // хотим читать данные от клиента
+		client_pfd.revents = 0;
+		m_poll_fds.push_back(client_pfd);
+		// Создаем объект Client и сохраняем указатель в m_clients
+		Client *client = new Client(client_fd);
+		m_clients[client_fd] = client;
+		// Лог/отладка
+		std::cout << "New client accepted, fd = " << client_fd << std::endl;
+	}
+}
+void Server::disconnectClient(int fd)
+{
+	// Удаляем клиента из m_clients и закрываем сокет
+	std::map<int, Client *>::iterator it = m_clients.find(fd);
+	if (it != m_clients.end())
+	{
+		Client *client = it->second;
+		delete client; // освобождаем память
+		m_clients.erase(it);
+	}
+	close(fd); // закрываем сокет
+	// Удаляем из m_poll_fds
+	for (size_t i = 0; i < m_poll_fds.size(); ++i)
+	{
+		if (m_poll_fds[i].fd == fd)
+		{
+			m_poll_fds.erase(m_poll_fds.begin() + i);
+			break;
+		}
+	}
+	std::cout << "Client fd " << fd << " disconnected and removed." << std::endl;
 }
 
 void Server::receiveData(int fd)
 {
-    char buffer[4096];
+	char buffer[4096];
 	 ssize_t bytes_read;
 // recv() читает данные из сокета.
 // Для неблокирующего сокета:
 //  - >0  → прочитали столько-то байт
 //  -  0  → клиент закрыл соединение
 //  - <0  → ошибка (в т.ч. EAGAIN/EWOULDBLOCK)
-    bytes_read = recv(fd, buffer, sizeof(buffer), 0);
-    if (bytes_read < 0)
-    {
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return;
-        // любая другая ошибка — логируем и отключаем клиента
-        std::cerr << "recv() failed on fd " << fd << ": "
-                  << std::strerror(errno) << std::endl;
-        close(fd); // TODO disconnectClient(fd);
-        close(fd); // TODO disconnectClient(fd);
-        return;
-    }
-    if (bytes_read == 0)
-    {
-        // 0 байт → клиент аккуратно закрыл соединение (EOF)
-        std::cout << "Client fd " << fd << " disconnected (EOF)" << std::endl;
-        close(fd); // TODO disconnectClient(fd);
-        close(fd); // TODO disconnectClient(fd);
-        return;
-    }
-    // Преобразую принятые байты в std::string
-    std::string data(buffer, bytes_read);
-    // Находим клиента по fd
-    std::map<int, Client *>::iterator it = m_clients.find(fd);
-    if (it == m_clients.end())
-    {
-        // Теоретически не должно случаться, но на всякий случай проверяем
-        std::cerr << "receiveData(): no Client object for fd " << fd << std::endl;
-        return;
-    }
-    Client *client = it->second;
-    // 1. Добавляем новые данные в входной буфер клиента.
-    //    Здесь мы не предполагаем, что получили ровно одну команду.
-    client->appendToInBuf(data);
-    // 2. Достаём из буфера все полные команды, которые есть.
-    //    IRC-команды заканчиваются на "\r\n".
-    while (client->hasCompleteCmd())
-    {
-        std::string cmd = client->extractNextCmd();
-        // На этом этапе у нас есть одна "цельная" строка-команда.
-        // Пока Таня пишет протокольную часть, делаю простой echo для проверки.
-        std::cout << "Received command from fd " << fd << ": [" << cmd << "]\n";
-        // Простейший echo: отправим обратно ту же команду с префиксом и \r\n
-        std::string response = "ECHO: " + cmd + "\r\n";
-        // send() может отправить не все байты, но на первом этапе для простоты
-        // не делаю буферизацию на запись (это будет в следующем шаге).
-        ssize_t bytes_sent = send(fd, response.c_str(), response.size(), 0);
-        if (bytes_sent < 0)
-        {
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-            {
-                // Позднее: сюда нужно добавить m_outbuf и POLLOUT.
-                std::cerr << "send() would block on fd " << fd
-                          << " (need output buffer later)" << std::endl;
-            }
-            else
-            {
-                std::cerr << "send() failed on fd " << fd << ": "
-                          << std::strerror(errno) << std::endl;
-                close(fd); // TODO disconnectClient(fd);
-                close(fd); // TODO disconnectClient(fd);
-                return;
-            }
-        }
-    }
+	bytes_read = recv(fd, buffer, sizeof(buffer), 0);
+	if (bytes_read < 0)
+	{
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+			return;
+		// любая другая ошибка — логируем и отключаем клиента
+		std::cerr << "recv() failed on fd " << fd << ": "
+				  << std::strerror(errno) << std::endl;
+		disconnectClient(fd);
+		return;
+	}
+	if (bytes_read == 0)
+	{
+		// 0 байт → клиент аккуратно закрыл соединение (EOF)
+		std::cout << "Client fd " << fd << " disconnected (EOF)" << std::endl;
+		disconnectClient(fd); 
+		return;
+	}
+	// Преобразую принятые байты в std::string
+	std::string data(buffer, bytes_read);
+	// Находим клиента по fd
+	std::map<int, Client *>::iterator it = m_clients.find(fd);
+	if (it == m_clients.end())
+	{
+		// Теоретически не должно случаться, но на всякий случай проверяем
+		std::cerr << "receiveData(): no Client object for fd " << fd << std::endl;
+		return;
+	}
+	Client *client = it->second;
+	// 1. Добавляем новые данные в входной буфер клиента.
+	//    Здесь мы не предполагаем, что получили ровно одну команду.
+	client->appendToInBuf(data);
+	// 2. Достаём из буфера все полные команды, которые есть.
+	//    IRC-команды заканчиваются на "\r\n".
+	while (client->hasCompleteCmd())
+	{
+		std::string cmd = client->extractNextCmd();
+		// На этом этапе у нас есть одна "цельная" строка-команда.
+		// Пока Таня пишет протокольную часть, делаю простой echo для проверки.
+		std::cout << "Received command from fd " << fd << ": [" << cmd << "]\n";
+		// Простейший echo: отправим обратно ту же команду с префиксом и \r\n
+		std::string response = "ECHO: " + cmd + "\r\n";
+		// send() может отправить не все байты, но на первом этапе для простоты
+		// не делаю буферизацию на запись (это будет в следующем шаге).
+		ssize_t bytes_sent = send(fd, response.c_str(), response.size(), 0);
+		if (bytes_sent < 0)
+		{
+			if (errno == EAGAIN || errno == EWOULDBLOCK)
+			{
+				// Позднее: сюда нужно добавить m_outbuf и POLLOUT.
+				std::cerr << "send() would block on fd " << fd
+						  << " (need output buffer later)" << std::endl;
+			}
+			else
+			{
+				std::cerr << "send() failed on fd " << fd << ": "
+						  << std::strerror(errno) << std::endl;
+				disconnectClient(fd);
+				return;
+			}
+		}
+	}
 }
 
 void Server::run()
 {
 	// 1. Добавляем слушающий сокет в вектор pollfd.
-    // Этот вектор говорит poll(), какие дескрипторы мы хотим отслеживать.
+	// Этот вектор говорит poll(), какие дескрипторы мы хотим отслеживать.
 	m_poll_fds.clear();
 	pollfd listen_pfd;
 	listen_pfd.fd = m_listen_fd; 
@@ -276,14 +312,14 @@ void Server::run()
 		if (ret < 0)
 		{
 			// EINTR = сигнал прервал poll(), это не опасная ошибка (просто сигнал), продолжаем цикл
-            if (errno == EINTR)
-                continue;
+			if (errno == EINTR)
+				continue;
 			// Любая другая ошибка — считаем фатальной
 			throw std::runtime_error("poll() failed: " + std::string(strerror(errno)));
 		}
 		// 3. Проходим по всем отслеживаемым дескрипторам и смотрим, у кого есть события
-        // ВАЖНО: мы читаем fd и revents в локальные переменные, потому что
-        // внутри цикла можем вызывать disconnectClient(), который изменит m_poll_fds.
+		// ВАЖНО: мы читаем fd и revents в локальные переменные, потому что
+		// внутри цикла можем вызывать disconnectClient(), который изменит m_poll_fds.
 		for (size_t i = 0; i < m_poll_fds.size(); ++i)
 		{
 			int fd = m_poll_fds[i].fd;
@@ -296,7 +332,7 @@ void Server::run()
 			if (fd == m_listen_fd)
 			{
 				// Слушающий сокет - Принимаем одного или несколько клиентов
-				acceptСlient();
+				acceptClient();
 			}
 			else
 			{
@@ -305,15 +341,14 @@ void Server::run()
 				if (revents & POLLIN)
 				{
 					// Если сокет готов к чтению — читаем данные
-					receivData(fd);
+					receiveData(fd);
 				}
 				if (revents & (POLLHUP | POLLERR))
 				{
 					// Если произошла ошибка или клиент повесил трубку — отключаем его
-					close(fd); // TODO disconnectClient(fd);
+					disconnectClient(fd);
 				}
 			}	
 		}
 	}
 }
-
