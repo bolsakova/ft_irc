@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/03 23:14:01 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/07 18:16:25 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/07 19:04:55 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -52,16 +52,13 @@ Server::~Server()
 	if (m_listen_fd >= 0)
 		close(m_listen_fd);
 	// 2. Close all client sockets and free memory
-	for (std::map<int, Client *>::iterator it = m_clients.begin();
-		 it != m_clients.end(); ++it)
+	for (auto &pair : m_clients)
 	{
-		int fd = it->first;
-		Client *client = it->second;
+		int fd = pair.first;
 		if (fd >= 0)
 			close(fd);   // close the socket itself
-		delete client;   // free the object
 	}
-	// 3. Clear structures
+	// 3. Очищаем коллекции (unique_ptr сам вызовет delete)
 	m_clients.clear();
 	m_poll_fds.clear();
 	std::cout << "Server destroyed: all sockets closed, all clients removed." << std::endl;
@@ -189,41 +186,41 @@ void Server::acceptClient()
 		client_pfd.revents = 0;
 		m_poll_fds.push_back(client_pfd);
 		// Создаем объект Client и сохраняем указатель в m_clients
-		Client *client = new Client(client_fd);
-		m_clients[client_fd] = client;
+		// Client *client = new Client(client_fd);
+		// m_clients[client_fd] = client;
+		// m_clients[client_fd] = std::make_unique<Client>(client_fd); //with copy constructor
+		m_clients.emplace(client_fd, std::make_unique<Client>(client_fd)); //without copy constructor
 		// Лог/отладка
 		std::cout << "New client accepted, fd = " << client_fd << std::endl;
 	}
 }
 void Server::disconnectClient(int fd)
 {
-	// 1. Close socket first
-    if (fd >= 0)
-        close(fd);
+	// 1. Close socket
+	if (fd >= 0)
+		close(fd);
 
-    // 2. Remove Client object
-    auto it = m_clients.find(fd);
-    if (it != m_clients.end())
-    {
-        delete it->second;
-        m_clients.erase(it);
-    }
-    // 3. Remove fd from poll fds
-    for (size_t i = 0; i < m_poll_fds.size(); ++i)
-    {
-        if (m_poll_fds[i].fd == fd)
-        {
-            m_poll_fds.erase(m_poll_fds.begin() + i);
-            break;
-        }
-    }
+	// 2. Remove from clients map (unique_ptr frees memory)
+	m_clients.erase(fd);
+
+	// 3. Remove fd from poll fds
+	for (size_t i = 0; i < m_poll_fds.size(); ++i)
+	{
+		if (m_poll_fds[i].fd == fd)
+		{
+			m_poll_fds.erase(m_poll_fds.begin() + i);
+			break;
+		}
+	}
+
 	std::cout << "Client fd " << fd << " disconnected and removed." << std::endl;
 }
+
 
 void Server::receiveData(int fd)
 {
 	char buffer[4096];
-	 ssize_t bytes_read;
+	ssize_t bytes_read;
 // recv() читает данные из сокета.
 // Для неблокирующего сокета:
 //  - >0  → прочитали столько-то байт
@@ -250,22 +247,23 @@ void Server::receiveData(int fd)
 	// Преобразую принятые байты в std::string
 	std::string data(buffer, bytes_read);
 	// Находим клиента по fd
-	std::map<int, Client *>::iterator it = m_clients.find(fd);
+	// std::map<int, Client *>::iterator it = m_clients.find(fd);
+	auto it = m_clients.find(fd);
 	if (it == m_clients.end())
 	{
 		// Теоретически не должно случаться, но на всякий случай проверяем
 		std::cerr << "receiveData(): no Client object for fd " << fd << std::endl;
 		return;
 	}
-	Client *client = it->second;
+	Client &client = *(it->second);// получаем ссылку на Client объект
 	// 1. Добавляем новые данные в входной буфер клиента.
 	//    Здесь мы не предполагаем, что получили ровно одну команду.
-	client->appendToInBuf(data);
+	client.appendToInBuf(data);
 	// 2. Достаём из буфера все полные команды, которые есть.
 	//    IRC-команды заканчиваются на "\r\n".
-	while (client->hasCompleteCmd())
+	while (client.hasCompleteCmd())
 	{
-		std::string cmd = client->extractNextCmd();
+		std::string cmd = client.extractNextCmd();
 		// На этом этапе у нас есть одна "цельная" строка-команда.
 		// Пока Таня пишет протокольную часть, делаю простой echo для проверки.
 		std::cout << "Received command from fd " << fd << ": [" << cmd << "]\n";
@@ -320,7 +318,7 @@ void Server::run()
 			throw std::runtime_error("poll() failed: " + std::string(strerror(errno)));
 		}
 		if (m_poll_fds.empty())
-    		continue;
+			continue;
 		// 3. Проходим по всем отслеживаемым дескрипторам и смотрим, у кого есть события
 		// ВАЖНО: мы читаем fd и revents в локальные переменные, потому что
 		// внутри цикла можем вызывать disconnectClient(), который изменит m_poll_fds.

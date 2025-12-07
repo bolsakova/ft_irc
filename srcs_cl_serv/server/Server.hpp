@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/03 23:14:10 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/06 22:42:27 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/07 18:38:04 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,7 +16,7 @@
 
 #include <string>
 #include <vector>
-// #include <unordered_map>
+#include <memory>
 #include <map>
 #include <sys/poll.h>
 #include "../client/Client.hpp"
@@ -33,7 +33,7 @@ class Server
 	int m_listen_fd;
 	std::string m_password;
 	std::vector<pollfd> m_poll_fds; // все дескрипторы, которые отслеживает poll()
-	std::map<int, Client *> m_clients; // fd -> Client*, так как Client некопируемый, статус клиента дб единственным и уникальным
+	std::map<int, std::unique_ptr<Client>> m_clients; // переход на std::unique_ptr<Client>  к безопасному и современному C++17.
 
 	void initSocket(const std::string &port);
 	// обработка событий
