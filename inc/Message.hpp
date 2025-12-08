@@ -4,7 +4,6 @@
 #include <string>
 #include <vector>
 
-
 /**
  * @brief Structure representing a parsed IRC message
  * 

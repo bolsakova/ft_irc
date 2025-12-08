@@ -1,4 +1,5 @@
 #include "../inc/Parser.hpp"
+#include "../inc/Message.hpp"
 /**
  * @brief Extract command from IRC message
  * 
@@ -91,5 +92,15 @@ void Parser::extractParams(const std::string& line, std::vector<std::string>& pa
 	 * @return Parsed Message structure
 	 * @throws std::invalid_argument if message format is invalid
 	 */
+	Message Parser::parse(const std::string& raw) {
+		// Create empty message structure
+		Message	msg;
+
+		// Step 1: Remove \r\n from the end
+		std::string line = stripCRLF(raw);
+
+		// Step 2: Extract prefix if present
+		msg 
+	}
 	
 }
