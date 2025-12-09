@@ -1,5 +1,56 @@
 #include "../inc/Parser.hpp"
-#include "../inc/Message.hpp"
+
+/**
+ * @brief Remove \r\n from the end of string
+ * 
+ * IRC protocol requires each message to end with \r\n
+ * We need to remove it before parsing
+ */
+std::string Parser::stripCRLF(const std::string& str) {
+	// Check if string is long enough to have \r\n
+	if (str.length() < 2)
+		return str;
+	
+	// Check if it actually ends with \r\n
+	if (str[str.length() - 2] == '\r' && str[str.length() - 1] == '\n') {
+		// Return string without last 2 characters
+		return str.substr(0, str.length() - 2);
+	}
+
+	// If no \r\n found, return original string
+	return str;
+}
+
+/**
+ * @brief Extract prefix from IRC message
+ * 
+ * Prefix format: :servername or :nick[!user[@host]]
+ * Must e at the beginning of the message
+ */
+std::string Parser::extractPrefix(std::string& line) {
+	// Prefix must start with ':'
+	if (line.empty() || line[0] != ':')
+		return ""; // No prefix
+	
+	// Find the end of prefix (first space)
+	size_t spacePos = line.find(' ');
+
+	// If no space found, the entire line is prefix (invalid but we handle it)
+	if (spacePos == std::string::npos) {
+		std::string prefix = line.substr(1); // Skip the ':'
+		line.clear(); // Nothing left in line
+		return prefix;
+	}
+
+	// Extract prefix (without ':')
+	std::string prefix = line.substr(1, spacePos - 1);
+
+	// Remove prefix from line (including the space)
+	line = line.substr(spacePos + 1);
+
+	return prefix;
+}
+
 /**
  * @brief Extract command from IRC message
  * 
