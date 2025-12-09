@@ -1,9 +1,9 @@
-NAME = ft_irc_1
+NAME = ft_irc
 
 CXX = c++
 CXXFLAGS = -Wall -Wextra -Werror -std=c++17
 
-FILES = main
+FILES = test_parser Parser
 
 SRCDIR = src
 SRC = $(addsuffix .cpp, $(FILES))

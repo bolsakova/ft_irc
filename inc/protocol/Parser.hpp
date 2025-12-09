@@ -42,7 +42,7 @@ class Parser {
 			 * @throws std::invalid_argument if no command found
 			 */
 			static std::string	extractCommand(std::string& line);
-			void		extractParams(const std::string& line, std::vector<std::string>& params, std::string& trailing);
+			static void			extractParams(const std::string& line, std::vector<std::string>& params, std::string& trailing);
 
 	public:
 			/**
@@ -59,7 +59,6 @@ class Parser {
 			 * 3. Extrat command (required)
 			 * 4. Extract parameters and trailing
 			 */
-
 			static Message parse(const std::string& raw);
 
 };

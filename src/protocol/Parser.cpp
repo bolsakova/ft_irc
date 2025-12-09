@@ -133,33 +133,33 @@ void Parser::extractParams(const std::string& line, std::vector<std::string>& pa
 		// Remove processed parameter from remaining line
 		remaining = remaining.substr(spacePos + 1);
 	}
-
-	/**
-	 * @brief Parse a complete IRC message
-	 * 
-	 * This is the main parsing function that coordinates all steps
-	 * 
-	 * @param raw Raw IRC message (should end with \r\n)
-	 * @return Parsed Message structure
-	 * @throws std::invalid_argument if message format is invalid
-	 */
-	Message Parser::parse(const std::string& raw) {
-		// Create empty message structure
-		Message	msg;
-
-		// Step 1: Remove \r\n from the end
-		std::string line = stripCRLF(raw);
-
-		// Step 2: Extract prefix if present
-		msg.prefix = extractPrefix(line);
-
-		// Step 3: Extract command (required)
-		msg.command = extractCommand(line);
-
-		// Step 4: Extract parameters and trailing
-		extractParams(line, msg.params, msg.trailing);
-
-		return msg;
-	}
-	
 }
+
+/**
+ * @brief Parse a complete IRC message
+ * 
+ * This is the main parsing function that coordinates all steps
+ * 
+ * @param raw Raw IRC message (should end with \r\n)
+ * @return Parsed Message structure
+ * @throws std::invalid_argument if message format is invalid
+ */
+Message Parser::parse(const std::string& raw) {
+	// Create empty message structure
+	Message	msg;
+
+	// Step 1: Remove \r\n from the end
+	std::string line = stripCRLF(raw);
+
+	// Step 2: Extract prefix if present
+	msg.prefix = extractPrefix(line);
+
+	// Step 3: Extract command (required)
+	msg.command = extractCommand(line);
+
+	// Step 4: Extract parameters and trailing
+	extractParams(line, msg.params, msg.trailing);
+
+	return msg;
+}
+
