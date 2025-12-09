@@ -151,7 +151,15 @@ void Parser::extractParams(const std::string& line, std::vector<std::string>& pa
 		std::string line = stripCRLF(raw);
 
 		// Step 2: Extract prefix if present
-		msg 
+		msg.prefix = extractPrefix(line);
+
+		// Step 3: Extract command (required)
+		msg.command = extractCommand(line);
+
+		// Step 4: Extract parameters and trailing
+		extractParams(line, msg.params, msg.trailing);
+
+		return msg;
 	}
 	
 }
