@@ -22,8 +22,26 @@ class Parser {
 			 */
 			static std::string stripCRLF(const std::string& str);
 
+			/**
+			 * @brief Extract prefix from the message
+			 * 
+			 * @param line Current line being processed (will be modified)
+			 * @return Extracted prefix or empty string if no prefix
+			 * 
+			 * @details
+			 * If line starts with ':', extracts everything until first space
+			 * and removes it from the line
+			 */
+			static std::string extractPrefix(std::string& line);
 
-			std::string	extractCommand(std::string& line);
+			/**
+			 * @brief Extract command from the message
+			 * 
+			 * @param line Current line being processed (will be modified)
+			 * @return Extracted command
+			 * @throws std::invalid_argument if no command found
+			 */
+			static std::string	extractCommand(std::string& line);
 			void		extractParams(const std::string& line, std::vector<std::string>& params, std::string& trailing);
 
 	public:
