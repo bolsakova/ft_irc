@@ -1,4 +1,4 @@
-#include "../inc/Parser.hpp"
+#include "../../inc/protocol/Parser.hpp"
 
 /**
  * @brief Remove \r\n from the end of string
