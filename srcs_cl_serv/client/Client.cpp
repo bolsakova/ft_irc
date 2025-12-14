@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/05 17:44:59 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/14 21:37:52 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/15 00:11:02 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -32,14 +32,10 @@ bool Client::hasCompleteCmd() const
 std::string Client::extractNextCmd()
 {
 	size_t pos = m_inbuf.find('\n');
-	if (pos == std::string::npos)
-		return "";
-	// Берем все до \n
 	std::string cmd = m_inbuf.substr(0, pos);
-	//усли перед \n стоит \r, удаляем его
-	if (pos > 0 && cmd[pos - 1] == '\r')
-		cmd.erase(pos - 1, 1);			
-	m_inbuf.erase(0, pos + 2); // +2 to remove \r\n
+	if (!cmd.empty() && cmd[cmd.size() - 1] == '\r')
+		cmd.erase(cmd.size() - 1);
+	m_inbuf.erase(0, pos + 1);
 	return cmd;
 }
 void Client::appendToOutBuf(const std::string &data)
@@ -50,4 +46,24 @@ void Client::appendToOutBuf(const std::string &data)
 bool Client::hasDataToSend() const
 {
 	return !m_outbuf.empty(); // 1 = есть данные, 0 - пуст
+}
+
+const std::string& Client::getOutBuf() const
+{
+	return m_outbuf;
+}
+
+void Client::consumeOutBuf(std::size_t count)
+{
+	if (count >= m_outbuf.size())
+	{
+		m_outbuf.clear();
+		return;
+	}
+	m_outbuf.erase(0, count);
+}
+
+const std::string& Client::getInBuf() const
+{
+    return m_inbuf;
 }

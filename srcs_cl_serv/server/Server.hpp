@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/03 23:14:10 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/14 22:12:26 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/14 23:31:20 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -42,6 +42,7 @@ class Server
 	void disconnectClient(int fd);
 	void sendData(int fd);
 	void enablePolloutForFD(int fd);
+	void disablePolloutForFd(int fd);
 
 	public:
 	// Deleted OCF methods (canonical but disabled)
@@ -52,6 +53,7 @@ class Server
 	Server(const std::string &port, const std::string &password);
 	~Server();
 	void run();
+
 };
 
 #endif

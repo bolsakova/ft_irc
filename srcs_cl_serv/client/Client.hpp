@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/05 17:44:40 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/14 21:15:07 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/14 23:32:03 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -36,8 +36,12 @@ public:
 	void appendToInBuf(const std::string &data);
 	bool hasCompleteCmd() const;
 	std::string extractNextCmd();// вернет одну команду до \r\n
+	const std::string& getInBuf() const;
+	
 	void appendToOutBuf(const std::string &data);
 	bool hasDataToSend()const;
+	const std::string& getOutBuf() const;
+	void consumeOutBuf(std::size_t count);
 };
 
 #endif

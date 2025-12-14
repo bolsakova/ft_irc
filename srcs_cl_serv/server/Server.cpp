@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/03 23:14:01 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/14 23:03:34 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/15 00:26:44 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -245,9 +245,25 @@ void Server::enablePolloutForFD(int fd)
 			// 3) Добавляем флаг POLLOUT, чтобы poll() уведомил о готовности писать
 			m_poll_fds[i].events = m_poll_fds[i].events | POLLOUT;
 			// 4) Выходим, как только настроили нужный дескриптор
-			return
+			return;
 		}
 	} 
+}
+
+void Server::disablePolloutForFd(int fd)
+{
+	// 1) Проходим по всем отслеживаемым дескрипторам
+	for(size_t i = 0; i < m_poll_fds.size(); ++i)
+	{
+		// 2) Ищем нужный fd
+		if(m_poll_fds[i].fd == fd)
+		{
+			// 3) Убираем флаг POLLOUT, чтобы poll() больше не ждал готовности к записи
+			m_poll_fds[i].events = m_poll_fds[i].events & (~POLLOUT);
+			// 4) Выходим после обновления нужного дескриптора
+			return;
+		}
+	}
 }
 
 void Server::receiveData(int fd)
@@ -289,8 +305,14 @@ void Server::receiveData(int fd)
 		return;
 	}
 	Client &client = *(it->second);// получаем ссылку на Client объект
-	// 1. Добавляем новые данные в входной буфер клиента.
-	//    Здесь мы не предполагаем, что получили ровно одну команду.
+	// Защищаемся от переполнения входного буфера: 8192 байта (8 КБ) как простой лимит на одну порцию данных
+	if(client.getInBuf().size() > 8192)
+	{
+		    std::cerr << "Client fd " << fd
+              << " input buffer overflow, disconnecting\n";
+			disconnectClient(fd);
+			return;
+	}
 	client.appendToInBuf(data);
 	// 2. Достаём из буфера все полные команды, которые есть.
 	//    IRC-команды заканчиваются на "\r\n".
@@ -307,7 +329,7 @@ void Server::receiveData(int fd)
 		client.appendToOutBuf(response);
 		// 3) Включаем POLLOUT для этого fd,
 		// чтобы poll() разбудил нас, когда сокет готов писать.
-		enablePolloutForFD();
+		enablePolloutForFD(fd);
 	}
 }
 void Server::sendData(int fd)
@@ -316,13 +338,11 @@ void Server::sendData(int fd)
 	Client &client = *m_clients[fd];
 	
 	//  Если в исходящем буфере ничего нет — сразу выходим
-	if(client.m_outbuf.empty())
+	if(!client.hasDataToSend())
 		return;
 	//  Пытаемся отправить содержимое буфера в сокет
-	ssize_t sent = send(fd,
-			client.m_outbuf.c_str,
-			client.m_outbuf.size, 
-			0);
+	const std::string &out = client.getOutBuf();
+	ssize_t sent = send(fd, out.c_str(), out.size(), 0);
 	//  Обработка ошибок send()
 	if(sent < 0)
 	{
@@ -334,7 +354,9 @@ void Server::sendData(int fd)
 		return;
 	}
 	//  Удаляем из буфера уже отправленную часть
-	client.m_outbuf.erase(0, sent);
+	client.consumeOutBuf(static_cast<std::size_t>(sent));
+	if(!client.hasDataToSend())
+		disablePolloutForFd(fd);
 }
 
 void Server::run()
@@ -361,7 +383,9 @@ void Server::run()
 			if (errno == EINTR)
 				continue;
 			// Любая другая ошибка — считаем фатальной
-			throw std::runtime_error("poll() failed: " + std::string(strerror(errno)));
+			//throw без пользы уронит процесс (или потребует лишний try/catch) в run() это авария окружения, не логика кода: логируем и выходим, чтобы аккуратно закрыть сервер. 
+			std::cerr << "poll() failed: " << std::endl; 
+			break;
 		}
 		if (m_poll_fds.empty())
 			continue;
