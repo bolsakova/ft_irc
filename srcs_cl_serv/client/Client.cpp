@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/05 17:44:59 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/07 18:06:12 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/14 21:37:52 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -41,4 +41,13 @@ std::string Client::extractNextCmd()
 		cmd.erase(pos - 1, 1);			
 	m_inbuf.erase(0, pos + 2); // +2 to remove \r\n
 	return cmd;
+}
+void Client::appendToOutBuf(const std::string &data)
+{
+	m_outbuf = m_outbuf + data; // append data to outbuf - concatenation of strings
+}
+
+bool Client::hasDataToSend() const
+{
+	return !m_outbuf.empty(); // 1 = есть данные, 0 - пуст
 }

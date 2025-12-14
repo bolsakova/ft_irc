@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/03 23:14:10 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/07 18:38:04 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/14 22:12:26 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -40,6 +40,8 @@ class Server
 	void acceptClient();
 	void receiveData(int fd);
 	void disconnectClient(int fd);
+	void sendData(int fd);
+	void enablePolloutForFD(int fd);
 
 	public:
 	// Deleted OCF methods (canonical but disabled)

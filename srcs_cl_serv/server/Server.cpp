@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/03 23:14:01 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/07 19:04:55 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/14 23:03:34 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -46,22 +46,40 @@ Server::Server(const std::string& port, const std::string& password)
 	std::cout << "Server started on port " << port << std::endl;
 }
 
+// unique_ptr automatically frees memory.
+// We do NOT need to delete Client manually.
+// Client objects are destroyed when:
+//  - an element is erased from m_clients
+//  - m_clients.clear() is called
+//  - or when m_clients itself is destroyed as a class member
 Server::~Server()
 {
-	// 1. Close the listening socket if it's open
+	// 1. Close the listening socket
 	if (m_listen_fd >= 0)
 		close(m_listen_fd);
-	// 2. Close all client sockets and free memory
+
+	// 2. Close all client sockets (fd are system resources)
 	for (auto &pair : m_clients)
 	{
 		int fd = pair.first;
 		if (fd >= 0)
-			close(fd);   // close the socket itself
+			close(fd);
 	}
-	// 3. Очищаем коллекции (unique_ptr сам вызовет delete)
+
+	// 3. Explicitly clear containers (optional but makes intent clear)
+	// unique_ptr will automatically delete Client objects
 	m_clients.clear();
 	m_poll_fds.clear();
+
 	std::cout << "Server destroyed: all sockets closed, all clients removed." << std::endl;
+
+	// Notes:
+	// - Calling clear() is optional:
+	//   m_clients will be destroyed automatically when Server is destroyed.
+	// - std::vector<m_poll_fds> also frees its memory automatically in its destructor.
+	// - clear() is used here only for clarity and explicit resource release order.
+	// используется здесь только для ясности и четкого порядка освобождения ресурсов
+	
 }
 
 int set_non_blocking(int fd)
@@ -216,6 +234,21 @@ void Server::disconnectClient(int fd)
 	std::cout << "Client fd " << fd << " disconnected and removed." << std::endl;
 }
 
+void Server::enablePolloutForFD(int fd)
+{
+	// 1) Проходим по всем отслеживаемым дескрипторам poll()
+	for(size_t i = 0; i < m_poll_fds.size(); ++i)
+	{
+		// 2) Ищем нужный fd
+		if(m_poll_fds[i].fd == fd)
+		{
+			// 3) Добавляем флаг POLLOUT, чтобы poll() уведомил о готовности писать
+			m_poll_fds[i].events = m_poll_fds[i].events | POLLOUT;
+			// 4) Выходим, как только настроили нужный дескриптор
+			return
+		}
+	} 
+}
 
 void Server::receiveData(int fd)
 {
@@ -267,28 +300,41 @@ void Server::receiveData(int fd)
 		// На этом этапе у нас есть одна "цельная" строка-команда.
 		// Пока Таня пишет протокольную часть, делаю простой echo для проверки.
 		std::cout << "Received command from fd " << fd << ": [" << cmd << "]\n";
-		// Простейший echo: отправим обратно ту же команду с префиксом и \r\n
+		// Формируем ответ (пока echo, потом будет protocol): отправим обратно ту же команду с префиксом и \r\n
 		std::string response = "ECHO: " + cmd + "\r\n";
-		// send() может отправить не все байты, но на первом этапе для простоты
-		// не делаю буферизацию на запись (это будет в следующем шаге).
-		ssize_t bytes_sent = send(fd, response.c_str(), response.size(), 0);
-		if (bytes_sent < 0)
-		{
-			if (errno == EAGAIN || errno == EWOULDBLOCK)
-			{
-				// Позднее: сюда нужно добавить m_outbuf и POLLOUT.
-				std::cerr << "send() would block on fd " << fd
-						  << " (need output buffer later)" << std::endl;
-			}
-			else
-			{
-				std::cerr << "send() failed on fd " << fd << ": "
-						  << std::strerror(errno) << std::endl;
-				disconnectClient(fd);
-				return;
-			}
-		}
+		// send() может отправить не все байты, поэтому используем выходной буфер, который добавляет 
+		// строки к существующему стрингу
+		client.appendToOutBuf(response);
+		// 3) Включаем POLLOUT для этого fd,
+		// чтобы poll() разбудил нас, когда сокет готов писать.
+		enablePolloutForFD();
 	}
+}
+void Server::sendData(int fd)
+{
+	//  Берём ссылку на клиента по его дескриптору, копии запрещены, работаем только с существующим обьектом
+	Client &client = *m_clients[fd];
+	
+	//  Если в исходящем буфере ничего нет — сразу выходим
+	if(client.m_outbuf.empty())
+		return;
+	//  Пытаемся отправить содержимое буфера в сокет
+	ssize_t sent = send(fd,
+			client.m_outbuf.c_str,
+			client.m_outbuf.size, 
+			0);
+	//  Обработка ошибок send()
+	if(sent < 0)
+	{
+		if(errno == EAGAIN || errno == EWOULDBLOCK)
+		// Сокет временно не готов к записи — попробуем позже
+			return;
+		// Любая другая ошибка — отключаем клиента
+		disconnectClient(fd);
+		return;
+	}
+	//  Удаляем из буфера уже отправленную часть
+	client.m_outbuf.erase(0, sent);
 }
 
 void Server::run()
@@ -348,12 +394,15 @@ void Server::run()
 					disconnectClient(fd);
 					continue;  // важно: не идём в POLLIN для этого fd
 				}
-				{
-					// 2. Только если нет ошибок — читаем данные
-					if (revents & POLLIN)
-						receiveData(fd);
-				}
+				// 2. Только если нет ошибок — читаем данные
+				if (revents & POLLIN)
+					receiveData(fd);
+				// 3. Потом пишем 
+				if (revents & POLLOUT)
+					sendData(fd);
 			}	
+			// Почему порядок read → write норм: часто после чтения ты добавляешь данные в outbuf
+			// и тут же в этом же цикле можно попробовать отправить
 		}
 	}
 }
