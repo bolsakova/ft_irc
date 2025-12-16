@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/05 17:44:40 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/14 23:32:03 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/16 23:39:25 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,16 +17,18 @@
 
 class Client
 {
-private:
-	int m_fd;
-	std::string m_inbuf;
-	std::string m_outbuf;
+	private:
+	int			m_fd;
+	std::string	m_inbuf;
+	std::string	m_outbuf;
+	// peer closed its write side (recv returned 0)
+	bool		m_peer_closed;
 	
-public:
-	// Deleted OCF methods (canonical but disabled)
-	Client() = delete;                        // нельзя без fd
-    Client(const Client&) = delete;
-    Client& operator=(const Client&) = delete;
+	public:
+	// deleted OCF methods (canonical but disabled)
+	Client() = delete; //forbidden without fd
+	Client(const Client& src) = delete;
+	Client& operator=(const Client& rhs) = delete;
 //explicit к констр. с одним параметром, запрещает неявные преобразования типов, от случайного вызова конструктора с int. 
 //Особенно важно для классов, где аргумент — идентификатор ресурса (fd, socket, handler)	
 	explicit Client(int fd);
@@ -42,6 +44,9 @@ public:
 	bool hasDataToSend()const;
 	const std::string& getOutBuf() const;
 	void consumeOutBuf(std::size_t count);
+	
+	void markPeerClosed();
+	bool isPeerClosed() const;
 };
 
 #endif
