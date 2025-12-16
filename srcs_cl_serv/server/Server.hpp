@@ -6,13 +6,12 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/03 23:14:10 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/14 23:31:20 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/16 19:33:59 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #ifndef SERVER_HPP
 #define SERVER_HPP
-
 
 #include <string>
 #include <vector>
@@ -46,9 +45,9 @@ class Server
 
 	public:
 	// Deleted OCF methods (canonical but disabled)
-    Server() = delete;
-    Server(const Server& other) = delete;
-    Server& operator=(const Server& other) = delete;
+	Server() = delete;
+	Server(const Server& other) = delete;
+	Server& operator=(const Server& other) = delete;
 	
 	Server(const std::string &port, const std::string &password);
 	~Server();
