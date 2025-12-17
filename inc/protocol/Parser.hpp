@@ -50,7 +50,10 @@ class Parser {
 			 * @param[out] params Vector to store regular space-separated parameters
 			 * @param[out] trailing String to store trailing parameter (after ':')
 			 */
-			static void			extractParams(const std::string& line, std::vector<std::string>& params, std::string& trailing);
+			static void			extractParams(
+				const std::string& line,
+				std::vector<std::string>& params,
+				std::string& trailing);
 
 	public:
 			/**

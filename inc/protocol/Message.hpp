@@ -63,4 +63,67 @@ struct Message {
 	}
 };
 
+/**
+ * @brief IRC Message Builder
+ * 
+ * This class is  responsible for constructing IRC protocol messages
+ * to be sent from server to clients according to RFC 1459 specifications
+ */
+class MessageBuilder {
+	private:
+			/**
+			 * @brief Format numeric code to 3-digit string (1 -> 001)
+			 * @param code The numeric code (1-999)
+			 * @return Three-digit string representation 
+			 */
+			static std::string& formatCode(int code);
+
+			/**
+			 * @brief Validate message length (max 512 characters)
+			 * @param message The complete message to validate
+			 * @throws std::length_error if message exceeds 512 characters
+			 */
+			static void validateLength(const std::string& message);
+
+	public:
+			/**
+			 * @brief Build numeric reply message (001,002,003...)
+			 * @param server Server name sending the reply
+			 * @param code Numeric reply code
+			 * @param target Target nickname
+			 * @param message Message text
+			 * @return Formatted message: ":<server> <code> <target> :<message>\r\n"
+			 */
+			static std::string buildNumericReply(
+				const std::string& server,
+				int code,
+				const std::string& target,
+				const std::string& message
+			);
+			
+			/**
+			 * @brief Build error reply message (4xx,5xx)
+			 * @param server Server name sending the error
+			 * @param code Error code
+			 * @param server Server name sending the error
+			 * @param server Server name sending the error
+			 * @param server Server name sending the error
+			 */
+			static std::string buildError(
+				const std::string& server,
+				int code,
+				const std::string& target,
+				const std::string& param,
+				const std::string& message
+			);
+
+			// Build command from server (JOIN, PART, PRIVMSG...)
+			static std::string buildCommand(
+				const std::string& prefix,
+				const std::string& command,
+				const std::vector<std::string>& params,
+				const std::string& trailing = ""
+			);
+};
+
 #endif

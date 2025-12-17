@@ -1,20 +1,147 @@
 IRC
 ===
 
-**IRC (Internet Relay Chat)**
-	- текстовый протокол, где клиент и сервер обмениваются сообщения в формате простыз текстовых строк; каждое сообщение заканчивается **\r\n** (CR+LF)
+***IRC (Internet Relay Chat)***
+ - текстовый протокол, где клиент и сервер обмениваются сообщения в формате простыз текстовых строк; каждое сообщение заканчивается **\r\n** (CR+LF)
 
-**Структура IRC сообщения**
-	[:<prefix>] <command> [<params>] [:<trailing>]
+1. ***Формат IRC сообщений (RFC 1459)***
+	[:<prefix>] <command> [<param1> <param2> ... <paramN>] [:<trailing>]
 
 	Prefix (optional)	- начинается с :, указывает
-							источник сообщения
+							источник сообщения (сервер или клиент)
 	Command				- сама команда
-							(NICK, USER, JOIN, ...)
-	Params				- параметры команды
-							(разделены пробелами)
-	Trailing			- последний параметр, может 
+							текстовая (NICK, USER, JOIN, ...) или 
+							numeric reply (001,433,461)
+	Parameters			- параметры команды
+							(разделены пробелами,
+							макс. 15,
+							не могут содержать пробелы - кроме trailing)
+	Trailing			- всегда последний параметр, может 
 							содержать пробелы, начинается с :
+	
+ *Примеры:*
+		Client → Server:
+		NICK tanja
+
+		Server → Client:
+		:server.com 001 tanja :Welcome to IRC!
+
+		Client → Server:
+		PRIVMSG #channel :Hello everyone!
+
+2. ***Numeric Replies***
+	
+ - IRC сервер отвечает клиенту *трёхзначными* кодами (numeric replies)
+
+	**Формат**
+		:<server> <code> <target> [params] :<message>
+	
+	**Категории кодов**
+		001-099		Connection registration, welcome messages
+		200-399		Command responses
+		400-599		Error messages
+
+	**Success replies (RPL_*)**
+		001 RPL_WELCOME			"Welcome to the IRC Network <nick>!<user>@<host>"
+		002 RPL_YOURHOST		"Your host is <servername>, running version <ver>"
+		003 RPL_CREATED			"This server was created <date>"
+		004 RPL_MYINFO			"<servername> <version> <available user modes> <available channel modes>"
+	
+	**Error replies (ERR_*)**
+		401 ERR_NOSUCHNICK				"<nickname> :No such nick/channel"
+		403 ERR_NOSUCHCHANNEL			"<channel> :No such channel"
+		431 ERR_NONICKNAMEGIVEN			":No nickname given"
+		432 ERR_ERRONEOUSNICKNAME		"<nick> :Erroneous nickname"
+		433 ERR_NICKNAMEINUSE			"<nick> :Nickname is already in use"
+		461 ERR_NEEDMOREPARAMS			"<command> :Not enough parameters"
+		462 ERR_ALREADYREGISTERED		":You may not reregister!"
+		464 ERR_PASSWDMISMATCH			":Password incorrect"
+
+3. ***Client Registration Flow***
+
+ - клиент должен пройти *регистрацию* перед использованием большинства команд.
+
+	**Последовательность**
+	
+	1. PASS <password>					(опционально, если сервер требует)
+	2. NICK <nickname>
+	3. USER <username> 0 * :<realname>
+
+	-> После успешной регистрации сервер отправляет:
+		:server 001 nick :Welcome...
+		:server 002 nick :Your host...
+		(и т.д.)
+	
+	**Состояние клиента**
+
+	UNREGISTERED	-> (PASS sent) -> PASS_OK
+					-> (NICK sent) -> NICK_OK
+					-> (USER sent) -> REGISTERED ✓
+	
+	**ВАЖНО** - пока клиент не *REGISTERED*, он не может:
+
+		- JOIN каналы
+		- отправлять PRIVMSG
+		- использовать большинство команд
+
+4. ***Nickname Rules (RFC 1459)***
+
+	**Допустимые символы** в nickname:
+	   - Буквы: A-Z, a-z
+	   - Цифры: 0-9
+	   - Специальные: -, [, ], \, `, _, ^, {, |, }
+	
+	**Ограничения:**
+       - максимум *9 символов* (в современных серверах больше, но для проекта - 9)
+	   - не может начинаться с цифры или -
+	   - должен быть уникальным на сервере
+
+5. ***Channel Names Rules***
+
+	**Формат**
+	    #<channel_name>		(локальный канал)
+	    &<channel_name>		(локальный, видим только на этом сервере)
+	
+	**Правила**
+	   - Начинается с # или &
+	   - Не содержит: пробелы, , (comma), \а (bell), \0
+	   - Максимум *50 символов*
+	   - Case-insensitive: #Channel == #channel
+
+6. ***Message Builder Theory***
+
+ - нужно создавать сообщения для отправки клиенту
+
+ **Зачем нужен Message Builder?**
+    *Parser* разбирает входящие сообщения (Client -> Server)
+    *Builder* создает исходящие сообщения (Server -> Client)
+
+ 1. *Server replies (numeric)*
+ 2. *Error messages*
+ 3. *Command responses (from server)*
+
+ **Задачи Builder**
+   1. Формировать *numeric replies*
+      - Сервер отвечает клиенту кодами (001,433,461...)
+	  - Правильный формат: :<server> <code> <target> :<message>\r\n
+   2. Формировать *error messages*
+      - Специальный случай numeric replies (4xx,5xx)
+	  - Может иметь дополнительные параметры
+   3. Формировать *server responses*
+      - Когда сервер пересылает сообщения между клиентами
+	  - Формат: :<source> <command> <params> :<trailing>\r\n
+
+ **Правила форматирования:**
+   - всегда заканчивать **\r\n**
+   - prefix (источник) начинается с :
+   - trailing parameter начинается с :
+   - пробелы между параметрами
+   - максимум 512 символов включая \r\n
+ 
+
+ 
+
+
 
 **Необходимость использования статических методов**
 	1. Нужно ли парсеру состояние?

@@ -16,7 +16,7 @@ OBJDIR = obj
 
 # Source files
 PROTOCOLDIR = src/protocol
-PROTOCOL_SRCS = $(addsuffix .cpp, $(PROTOCOLDIR))
+PROTOCOL_SRCS = $(PROTOCOLDIR)/Parser.cpp
 
 TEST_SRCS = test_parser.cpp
 
