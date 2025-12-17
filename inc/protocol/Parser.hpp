@@ -42,6 +42,14 @@ class Parser {
 			 * @throws std::invalid_argument if no command found
 			 */
 			static std::string	extractCommand(std::string& line);
+			
+			/**
+			 * @brief Extract regular parameters and trailing parameter from the remaining line
+			 * 
+			 * @param line Input string after prefix and command extraction
+			 * @param[out] params Vector to store regular space-separated parameters
+			 * @param[out] trailing String to store trailing parameter (after ':')
+			 */
 			static void			extractParams(const std::string& line, std::vector<std::string>& params, std::string& trailing);
 
 	public:
@@ -53,10 +61,10 @@ class Parser {
 			 * @throws std::invalid_argument if the message format is invalid
 			 * 
 			 * @details
-			 * The function performs the followig steps:
+			 * The function performs the following steps:
 			 * 1. Remove trailing \r\n
 			 * 2. Extract prefix if present (starts with ':')
-			 * 3. Extrat command (required)
+			 * 3. Extract command (required)
 			 * 4. Extract parameters and trailing
 			 */
 			static Message parse(const std::string& raw);

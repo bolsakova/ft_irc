@@ -25,7 +25,7 @@ std::string Parser::stripCRLF(const std::string& str) {
  * @brief Extract prefix from IRC message
  * 
  * Prefix format: :servername or :nick[!user[@host]]
- * Must e at the beginning of the message
+ * Must be at the beginning of the message
  */
 std::string Parser::extractPrefix(std::string& line) {
 	// Prefix must start with ':'
@@ -66,7 +66,7 @@ std::string Parser::extractCommand(std::string& line) {
 	if (line.empty())
 		throw std::invalid_argument("IRC message must have a command");
 	
-	// Step 2: Find where command ends (first apce or end of line)
+	// Step 2: Find where command ends (first space or end of line)
 	size_t spacePos = line.find(' ');
 
 	// Step 3: Extract command

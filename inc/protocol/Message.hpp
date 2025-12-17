@@ -13,7 +13,7 @@
 struct Message {
 	/**
 	 * @brief Optional prefix indicating the source of the message
-	 * Format can be: severname or nick[!user[@host]]
+	 * Format can be: servername or nick[!user[@host]]
 	 * Example: "tanja!user@host" or "irc.example.com"
 	 */
 	std::string prefix;
@@ -55,7 +55,7 @@ struct Message {
 	}
 
 	/**
-	 * @brief Get the total number of parameters (including trailing is present)
+	 * @brief Get the total number of parameters (including trailing if present)
 	 * @return Number of parameters
 	 */
 	size_t getTotalParams() const {
