@@ -65,4 +65,37 @@ fclean: clean
 
 re: fclean all
 
-.PHONY: all clean fclean re
+# Debug build
+debug:
+	@$(MAKE) DEBUG=1 re
+
+# Run tests
+test: $(NAME)
+	@echo "$(BLUE)Running tests...$(RESET)"
+	@./$(NAME)
+
+# Check for memory leaks with valgrind
+valgrind: $(NAME)
+	@echo "$(BLUE)Running valgrind...$(RESET)"
+	valgrind ---leak-check=full ---show-leak-kinds=all ./$(NAME)
+
+# Help target
+help:
+	@echo "$(BLUE)Available targets:$(RESET)"
+	@echo "  $(GREEN)all$(RESET)      - Build the project (default)"
+	@echo "  $(GREEN)clean$(RESET)    - Remove object files"
+	@echo "  $(GREEN)fclean$(RESET)   - Remove object files and executable"
+	@echo "  $(GREEN)re$(RESET)       - Rebuild everything"
+	@echo "  $(GREEN)debug$(RESET)    - Build with debug symbols and AddressSanitizer"
+	@echo "  $(GREEN)test$(RESET)     - Build and run tests"
+	@echo "  $(GREEN)valgrind$(RESET) - Run with valgrind memory checker"
+	@echo "  $(GREEN)help$(RESET)     - Show this help message"
+
+.PHONY: all clean fclean re debug test valgrind help create_dirs
+
+# Dependencies (automatic generation)
+-include $(OBJS:.o=.d)
+
+# Automatic dependency generation
+$(OBJDIR)/%.d: %.cpp | create_dirs
+	@$(CXX) $(CXXFLAGS) $(INCLUDES) -MM -MT $(@:.d=.o) $< > $@
