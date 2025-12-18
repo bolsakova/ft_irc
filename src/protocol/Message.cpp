@@ -112,12 +112,98 @@ std::string MessageBuilder::buildNumericReply(const std::string& server, int cod
  * @param target Target nickname (or "*" if unknown yet)
  * @param param Additional parameter indicating error context
  * 				(e.g., problematic nickname, channel name, or command)
- * @param message Error 
+ * @param message Error message text
+ * @return Formatted IRC error message string ending with \r\n
+ * 
+ * Format: :<server> <code> <target> <param> :<message>\r\n
+ * Example: ":ircserv 433 * tanja :Nickname is already in use\r\n"
+ * 
+ * Used for error replies:
+ * - ERR_NOSUCHNICK (401) - no such nickname exists
+ * - ERR_NOSUCHCHANNEL (403) - no such channel exists
+ * - ERR_NICKNAMEINUSE (433) - nickname is already taken
+ * - ERR_NEEDMOREPARAMS (461) - command requires more parameters
  */
 std::string MessageBuilder::buildError(const std::string& server, int code, const std::string& target, const std::string& param, const std::string& message) {
+	std::string result;
 
+	// Start with prefix (server name)
+	result += ':';
+	result += server;
+	result += ' ';
+
+	// Add formatted error code (e.g., "433")
+	result += formatCode(code);
+	result += ' ';
+
+	// Add target nickname
+	result += target;
+	result += ' ';
+
+	// Add additional parameter (problematic nick/channel/command)
+	result += param;
+
+	// Add trailing parameter with error message
+	result += " :";
+	result += message;
+
+	// Add IRC message terminator
+	result += "\r\n";
+
+	// Validate total length doesn't exceed 512 characters
+	validateLength(result);
+
+	return result;
 }
 
-// std::string MessageBuilder::buildCommand(const std::string& prefix, const std::string& command, const std::vector<std::string>& params, const std::string& trailing = "") {
+/**
+ * @brief Build command message from server (relay between clients)
+ * 
+ * @param prefix Message source in format nick!user@host or servername
+ * @param command IRC command (JOIN, PART, PRIVMSG, KICK, MODE, etc.)
+ * @param params Vector of regular parameters (without spaces)
+ * @param trailing Optional trailing parameter (can contain spaces)
+ * @return Formatted IRC command message string ending with \r\n
+ * 
+ * Format: :<prefix> <command> [params...] [:<trailing>]\r\n
+ * 
+ * Examples:
+ * - ":alice!user@host PRIVMSG bob :Hello there!\r\n"
+ * - ":alice!user@host JOIN #channel\r\n"
+ * - ":alice!user@host MODE #channel +o bob\r\n"
+ * - ":alice!user@host KICK #channel bob :Bad behavior\r\n"
+ * 
+ * Used when server relays messages between clients or sends
+ * notifications about channel/user events
+ */
+std::string MessageBuilder::buildCommand(const std::string& prefix, const std::string& command, const std::vector<std::string>& params, const std::string& trailing) {
+	std::string result;
 
-// }
+	// Start with prefix (source of the message)
+	result += ':';
+	result += prefix;
+	result += ' ';
+
+	// Add command
+	result += command;
+
+	// Add all regular parameters (separated by spaces)
+	for (size_t i = 0; i < params.size(); ++i) {
+		result += ' ';
+		result += params[i];
+	}
+
+	// Add trailing parametr if present
+	if (trailing.empty()) {
+		result += " :";
+		result += trailing;
+	}
+
+	// Add IRC message terminator
+	result += "\r\n";
+
+	// Validate total length doesn't exceed 512 characters
+	validateLength(result);
+
+	return result;
+}
