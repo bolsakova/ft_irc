@@ -3,6 +3,9 @@
 
 #include <string>
 #include <vector>
+#include <iomanip>
+#include <sstream>		// for std::ostringstream
+#include <stdexcept>	// for std::length_error
 
 /**
  * @brief Structure representing a parsed IRC message
