@@ -15,8 +15,7 @@ INCDIR = inc
 OBJDIR = obj
 
 # Source files
-PROTOCOLDIR = src/protocol
-PROTOCOL_SRCS = $(PROTOCOLDIR)/Parser.cpp
+PROTOCOL_SRCS = $(shell find $(SRCDIR) -name '*.cpp')
 
 TEST_SRCS = test_parser.cpp
 

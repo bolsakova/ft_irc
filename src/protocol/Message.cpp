@@ -77,13 +77,47 @@ void MessageBuilder::validateLength(const std::string& message) {
  * - RPL_MYINFO (004) - server information
  */
 std::string MessageBuilder::buildNumericReply(const std::string& server, int code, const std::string& target, const std::string& message) {
+	std::string result;
 
+	// Start with prefix (server name)
+	result += ':';
+	result += server;
+	result += ' ';
+
+	// Add formatted numeric code (e.g., "001")
+	result += formatCode(code);
+	result += ' ';
+
+	// Add target nickname
+	result += target;
+
+	// Add trailing parameter with message
+	result += " :";
+	result += message;
+
+	// Add IRC message terminator
+	result += "\r\n";
+
+	// Validate total length doesn't exceed 512 characters
+	validateLength(result);
+
+	return (result);
 }
 
+/**
+ * Build error reply message from server to client
+ * 
+ * @param server Server name sending the error
+ * @param code Error code (400-599)
+ * @param target Target nickname (or "*" if unknown yet)
+ * @param param Additional parameter indicating error context
+ * 				(e.g., problematic nickname, channel name, or command)
+ * @param message Error 
+ */
 std::string MessageBuilder::buildError(const std::string& server, int code, const std::string& target, const std::string& param, const std::string& message) {
 
 }
 
-std::string MessageBuilder::buildCommand(const std::string& prefix, const std::string& command, const std::vector<std::string>& params, const std::string& trailing = "") {
+// std::string MessageBuilder::buildCommand(const std::string& prefix, const std::string& command, const std::vector<std::string>& params, const std::string& trailing = "") {
 
-}
+// }
