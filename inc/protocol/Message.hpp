@@ -76,7 +76,7 @@ class MessageBuilder {
 			 * @param code The numeric code (1-999)
 			 * @return Three-digit string representation 
 			 */
-			static std::string& formatCode(int code);
+			static std::string formatCode(int code);
 
 			/**
 			 * @brief Validate message length (max 512 characters)
@@ -105,9 +105,10 @@ class MessageBuilder {
 			 * @brief Build error reply message (4xx,5xx)
 			 * @param server Server name sending the error
 			 * @param code Error code
-			 * @param server Server name sending the error
-			 * @param server Server name sending the error
-			 * @param server Server name sending the error
+			 * @param target Target nickname (or "*" if unknown)
+			 * @param param Additional parameter (problematic nick/channel)
+			 * @param message Error message text
+			 * @return Formatted message: ":<server> <code> <target> <param> :<message>\r\n"
 			 */
 			static std::string buildError(
 				const std::string& server,
@@ -117,7 +118,14 @@ class MessageBuilder {
 				const std::string& message
 			);
 
-			// Build command from server (JOIN, PART, PRIVMSG...)
+			/**
+			 * @brief Build command message from server
+			 * @param prefix Message source (nick!user@host or servername)
+			 * @param command IRC command (JOIN, PART, PRIVMSG, etc.)
+			 * @param params Vector of regular parameters
+			 * @param trailing Optional trailing parameter (can contain spaces)
+			 * @return Formatted message: ":<prefix> <command> [params] [:<trailing>]\r\n"
+			 */
 			static std::string buildCommand(
 				const std::string& prefix,
 				const std::string& command,
