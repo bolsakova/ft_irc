@@ -194,7 +194,7 @@ std::string MessageBuilder::buildCommand(const std::string& prefix, const std::s
 	}
 
 	// Add trailing parametr if present
-	if (trailing.empty()) {
+	if (!trailing.empty()) {
 		result += " :";
 		result += trailing;
 	}
