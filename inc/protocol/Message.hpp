@@ -42,25 +42,19 @@ struct Message {
 	 * @brief Check if the message has a prefix
 	 * @return True - if prefix is not empty, False - otherwise
 	 */
-	bool hasPrefix() const {
-		return !prefix.empty();
-	}
+	bool hasPrefix() const;
 	
 	/**
 	 * @brief Check if the message has a trailing parameter
 	 * @return True - if trailing is not empty, False - otherwise
 	 */
-	bool hasTrailing() const {
-	   return !trailing.empty();
-	}
+	bool hasTrailing() const;
 
 	/**
 	 * @brief Get the total number of parameters (including trailing if present)
 	 * @return Number of parameters
 	 */
-	size_t getTotalParams() const {
-		return params.size() + (hasTrailing() ? 1 : 0);
-	}
+	size_t getTotalParams() const;
 };
 
 /**
