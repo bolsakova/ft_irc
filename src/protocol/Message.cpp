@@ -55,7 +55,7 @@ void MessageBuilder::validateLength(const std::string& message) {
 	const size_t MAX_MESSAGE_LENGTH = 512;
 
 	if (message.length() > MAX_MESSAGE_LENGTH)
-		throw std::length_error("IRC messge exceeds maximum length of 512 characters");
+		throw std::length_error("IRC message exceeds maximum length of 512 characters");
 }
 
 /**

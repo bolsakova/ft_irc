@@ -17,7 +17,7 @@ OBJDIR = obj
 # Source files
 PROTOCOL_SRCS = $(shell find $(SRCDIR) -name '*.cpp')
 
-TEST_SRCS = test_parser.cpp
+TEST_SRCS = test_builder.cpp
 
 # All sources
 SRCS = $(TEST_SRCS) $(PROTOCOL_SRCS)
