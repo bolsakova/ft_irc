@@ -18,35 +18,61 @@
 class Client
 {
 	private:
-	int			m_fd;
-	std::string	m_inbuf;
-	std::string	m_outbuf;
-	// peer closed its write side (recv returned 0)
-	bool		m_peer_closed;
+		int			m_fd;
+		std::string	m_inbuf;
+		std::string	m_outbuf;
+		// IRC protocol state
+		std::string m_nickname;
+		std::string m_username;
+		std::string m_realname;
+		bool m_is_authenticated;
+		bool m_is_registered;
+		// peer closed its write side (recv returned 0)
+		bool		m_peer_closed;
 	
 	public:
-	// deleted OCF methods (canonical but disabled)
-	Client() = delete; //forbidden without fd
-	Client(const Client& src) = delete;
-	Client& operator=(const Client& rhs) = delete;
-//explicit к констр. с одним параметром, запрещает неявные преобразования типов, от случайного вызова конструктора с int. 
-//Особенно важно для классов, где аргумент — идентификатор ресурса (fd, socket, handler)	
-	explicit Client(int fd);
-	~Client();
-	
-	int getFD() const;
-	void appendToInBuf(const std::string &data);
-	bool hasCompleteCmd() const;
-	std::string extractNextCmd();// вернет одну команду до \r\n
-	const std::string& getInBuf() const;
-	
-	void appendToOutBuf(const std::string &data);
-	bool hasDataToSend()const;
-	const std::string& getOutBuf() const;
-	void consumeOutBuf(std::size_t count);
-	
-	void markPeerClosed();
-	bool isPeerClosed() const;
+		// deleted OCF methods (canonical but disabled): Client manages a unique fd
+		Client() = delete;                    // forbidden without fd: but fd is mandatory in this project
+		Client(const Client& src) = delete;   
+		Client& operator=(const Client& rhs) = delete;
+		// explicit constr prevents implicit(неявное) type conversions, important with fd, socket, handle
+		explicit Client(int fd);
+		~Client();
+
+		// === Client identity ===
+		int getFD() const;
+
+		// === Incoming data handling (input buffer) ===
+		void appendToInBuf(const std::string &data);
+		bool hasCompleteCmd() const;
+		std::string extractNextCmd();          // extracts one command ending with \r\n
+		const std::string& getInBuf() const;
+
+		// === Outgoing data handling (output buffer) ===
+		void appendToOutBuf(const std::string &data);
+		const std::string& getOutBuf() const;
+		void consumeOutBuf(std::size_t count);
+		bool hasDataToSend() const;
+
+		// === Connection state ===
+		void markPeerClosed();
+		bool isPeerClosed() const;
+
+		// === Name management === 
+		void setNickname(const std::string& nickname);
+		void setUsername(const std::string& username);
+		void setRealname(const std::string& realname);
+		const std::string& getNickname() const;
+		const std::string& getUsername() const;
+		const std::string& getRealname() const;
+
+		// === Authentication state === 
+		void setAuthenticated(bool auth);
+		bool isAuthenticated() const;
+
+		// === Registration state === 
+		void setRegistered(bool reg);
+		bool isRegistered() const;
 };
 
 #endif

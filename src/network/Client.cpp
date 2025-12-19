@@ -13,7 +13,15 @@
 #include "../../inc/network/Client.hpp"
 
 Client::Client(int fd)
-	: m_fd(fd), m_inbuf(""), m_outbuf(""), m_peer_closed(false) // init flag
+	: m_fd(fd),
+	  m_inbuf(""),
+	  m_outbuf(""),
+	  m_nickname(""),
+	  m_username(""),
+	  m_realname(""),
+	  m_is_authenticated(false),
+	  m_is_registered(false),
+	  m_peer_closed(false) // CHANGED
 {}
 
 Client::~Client(){}
@@ -86,3 +94,58 @@ bool Client::isPeerClosed() const
 {
 	return m_peer_closed;
 }
+
+// === Name management (new) ===
+void Client::setNickname(const std::string& nickname)
+{
+	m_nickname = nickname; // CHANGED
+}
+
+const std::string& Client::getNickname() const
+{
+	return m_nickname;
+}
+
+void Client::setUsername(const std::string& username)
+{
+	m_username = username; // CHANGED
+}
+
+const std::string& Client::getUsername() const
+{
+	return m_username;
+}
+
+void Client::setRealname(const std::string& realname)
+{
+	m_realname = realname; // CHANGED
+}
+
+const std::string& Client::getRealname() const
+{
+	return m_realname;
+}
+
+// === Authentication state (new) ===
+void Client::setAuthenticated(bool auth)
+{
+	m_is_authenticated = auth; // CHANGED
+}
+
+bool Client::isAuthenticated() const
+{
+	return m_is_authenticated;
+}
+
+// === Registration state (new) ===
+void Client::setRegistered(bool reg)
+{
+	m_is_registered = reg; // CHANGED
+}
+
+bool Client::isRegistered() const
+{
+	return m_is_registered;
+}
+
+
