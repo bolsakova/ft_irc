@@ -10,17 +10,18 @@ ifdef DEBUG
 endif
 
 # Directories
-SRCDIR = src
+# SRCDIR = src
 INCDIR = inc
 OBJDIR = obj
 
 # Source files
-PROTOCOL_SRCS = $(shell find $(SRCDIR) -name '*.cpp')
+NETWORK_SRCS = $(shell find src/network -name '*.cpp')
+PROTOCOL_SRCS = $(shell find src/protocol -name '*.cpp')
 
 TEST_SRCS = test_builder.cpp
 
 # All sources
-SRCS = $(TEST_SRCS) $(PROTOCOL_SRCS)
+SRCS = $(NETWORK_SRCS) $(PROTOCOL_SRCS) $(TEST_SRCS)
 
 # Object files with subdirectory structure
 OBJS = $(SRCS:%.cpp=$(OBJDIR)/%.o)
