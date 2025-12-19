@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "Client.hpp"
+#include "../../inc/network/Client.hpp"
 
 Client::Client(int fd)
 	: m_fd(fd), m_inbuf(""), m_outbuf(""), m_peer_closed(false) // init flag

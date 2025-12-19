@@ -403,8 +403,8 @@ void Server::sendData(int fd)
 	// If buffer is empty — stop watching POLLOUT
 	if (!client.hasDataToSend())
 		disablePolloutForFd(fd);
-		// If peer already closed and we finished sending,now we can close our side too
-		if (client.isPeerClosed())
+	// If peer already closed and we finished sending,now we can close our side too
+	if (client.isPeerClosed())
 		disconnectClient(fd);
 	return;
 }
