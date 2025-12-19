@@ -21,6 +21,7 @@
 #include <iostream>       // cout, cerr
 #include <cerrno>         // errno
 #include <csignal>        // signal/sigaction (SIGPIPE)
+#include "../../inc/protocol/CommandHandler.hpp"
 
 /*EAGAIN/EWOULDBLOCK - больше нет ожидающих подключений
 non-blocking and interrupt: обрабатывают и пробуют снова позже, не падая.-> временно нет данных, пробуем позже, не падая.
@@ -91,6 +92,8 @@ Server::Server(const std::string& port, const std::string& password)
 		std::cerr << "Failed to initialise socket on port " << port << "\n";
 		return;
 	}
+	// Создаём CommandHandler после успешной инициализации сокета
+	m_cmd_handler = std::make_unique<CommandHandler>(*this, m_password);
 	std::cout << "Server started on port " << port << std::endl;
 }
 
@@ -178,6 +181,7 @@ IPv4 xxx.xxx.xxx.xxx 32-бит→ всего ≈ 4.3 миллиарда адре
 IPv6 xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx 128-бит → ≈ 340 секстиллионов адресов (> чем атомов в Солнечной системе).
 socklen_t - POSIX определяет универсальный и переносимый тип для хранения длины адресных структур в сетевых вызовах.
 работает на любых ОС (32 и 64 битных), где типы могут отличаться размерами.
+
 */
 
 void Server::acceptClient()
@@ -191,16 +195,14 @@ void Server::acceptClient()
 		int client_fd = accept(m_listen_fd, (sockaddr *)&client_addr, &client_len);
 		if (client_fd < 0)
 		{
-			// accept() on non-blocking socket:
-			// - EAGAIN/EWOULDBLOCK means: no more pending connections (normal)
+			// accept() on non-blocking socket: при отсутствии ожидающих подключений accept возвращает -1 - EAGAIN/EWOULDBLOCK means: no more pending connections (normal)
 			if (errno == EAGAIN || errno == EWOULDBLOCK)
 				break;
 			// any other error — log it
 			std::cerr << "accept() failed: " << std::strerror(errno) << "\n";
 			break;
 		}
-		// Set client socket non-blocking
-		if (set_non_blocking(client_fd) < 0)
+		if (set_non_blocking(client_fd) < 0)// Set client socket non-blocking
 		{
 			std::cerr << "Failed to set client non-blocking, fd " << client_fd << "\n";
 			close(client_fd);
@@ -211,14 +213,8 @@ void Server::acceptClient()
 		pfd.fd = client_fd;
 		pfd.events = POLLIN;  // start with only read events
 		pfd.revents = 0;
-		m_poll_fds.push_back(pfd);
-		//push_back копирует структуру pollfd и добавляет в вектор
-		// Создаем объект Client и сохраняем указатель в m_clients
-		// Client *client = new Client(client_fd);
-		// m_clients[client_fd] = client;
-		// m_clients[client_fd] = std::make_unique<Client>(client_fd); //with copy constructor
+		m_poll_fds.push_back(pfd);//push_back копирует структуру pollfd и добавляет в вектор
 		m_clients.emplace(client_fd, std::make_unique<Client>(client_fd)); //without copy constructor
-		// Лог/отладка
 		std::cout << "New client accepted, fd = " << client_fd << std::endl;
 	}
 }
@@ -286,20 +282,21 @@ static void disable_pollevent(std::vector<pollfd> &poll_fds, int fd, short flag)
 	}
 }
 
-
+/**
+recv() reads data from the socket.
+For a non-blocking socket:
+	- >0  → read this nb of bytes
+	-  0  → client closed the connection
+	- <0  → error (including EAGAIN/EWOULDBLOCK)
+*/
 void Server::receiveData(int fd)
 {
-	// CHANGED: read in a loop until EAGAIN/EWOULDBLOCK (better for performance and correctness)
+	// read in a loop until EAGAIN/EWOULDBLOCK (better for performance and correctness)
 	// because poll() is level-triggered.
 	char buffer[4096];
 	ssize_t bytes_read;
 	while (true)
 	{
-		// recv() reads data from the socket.
-		// For a non-blocking socket:
-		//  - >0  → read this nb of bytes
-		//  -  0  → client closed the connection
-		//  - <0  → error (including EAGAIN/EWOULDBLOCK)
 		bytes_read = recv(fd, buffer, sizeof(buffer), 0);
 		if (bytes_read < 0)
 		{
@@ -307,7 +304,7 @@ void Server::receiveData(int fd)
 				break; // no more data for now
 			// Any other error — log and disconnect
 			std::cerr << "recv() failed on fd " << fd << ": "
-					  << std::strerror(errno) << std::endl; // CHANGED: strerror
+					  << std::strerror(errno) << std::endl;
 			disconnectClient(fd);
 			return;
 		}
@@ -349,19 +346,19 @@ void Server::receiveData(int fd)
 		while (client.hasCompleteCmd())
 		{
 			std::string cmd = client.extractNextCmd();
-			// На этом этапе у нас есть одна "цельная" строка-команда.
-			// Пока Таня пишет протокольную часть, делаю простой echo для проверки.
-			std::cout << "Received command from fd " << fd << ": [" << cmd << "]\n"; // CHANGED: keep \n escaped
-			// Формируем ответ (пока echo, потом будет protocol): отправим обратно ту же команду с префиксом и \r\n
-			std::string response = "ECHO: " + cmd + "\r\n";
-			// send() может отправить не все байты, поэтому используем выходной буфер, который добавляет 
-			// строки к существующему стрингу
-			client.appendToOutBuf(response);
-			// 3. Включаем POLLOUT для этого fd,
-			// чтобы poll() разбудил нас, когда сокет готов писать.
-			enablePolloutForFD(fd);
+			// std::cout << "Received command from fd " << fd << ": [" << cmd << "]\n"; //можно удалить если не нужно в аутпут
+			// Передаём команду в CommandHandler для обработки
+			m_cmd_handler->handleCommand(cmd, client);
+			// Если есть что отправить - включаем POLLOUT
+			if (client.hasDataToSend())
+				enablePolloutForFD(fd);
 		}
 	}
+}
+
+const std::map<int, std::unique_ptr<Client>>& Server::getClients() const
+{
+	return m_clients;
 }
 
 void Server::sendData(int fd)
@@ -386,7 +383,6 @@ void Server::sendData(int fd)
 	flags = MSG_NOSIGNAL;
 #endif
 	ssize_t sent = send(fd, out.c_str(), out.size(), flags);
-
 	//  Обработка ошибок send()
 	if (sent < 0)
 	{	// Сокет временно не готов к записи — попробуем позже
