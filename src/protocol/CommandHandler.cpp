@@ -211,3 +211,78 @@ void CommandHandler::handlePass(Client& client, const Message& msg) {
 		std::cout << "Client fd " << client.getFD() << " authentication failed\n";
 	}
 }
+
+/**
+ * @brief Handle NICK command - set or change client's nickname.
+ * Format: NICK <nickname>
+ * 
+ * @param client Client sending the command
+ * @param msg Parsed message with command and parameters
+ * 
+ * Algorithm:
+ * 			1. Check if nickname parameter exists -> error431
+ * 			2. Extract nickname from params[0] or trailing
+ * 			3. Validate nickname format (RFC 1459) -> error 432
+ * 			4. Check if nickname already in use -> error 433
+ * 			5. Set client's nickname
+ * 			6. If already registered: notify about nick change
+ * 			7. Check if registration is now complete -> send welcome
+ */
+void CommandHandler::handleNick(Client& client, const Message& msg) {
+	// Check if nickname parameter was provided
+	if (msg.params.empty() && msg.trailing.empty()) {
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NONICKNAMEGIVEN, "*",
+			"No nickname given"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Extract nickname (can be in params[0] or trailing)
+	std::string new_nick = msg.params.empty() ? msg.trailing : msg.params[0];
+
+	// Validate nickname according to RFC 1459 rules
+	if (!isValidNickname(new_nick)) {
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_ERRONEOUSNICKNAME, "*", new_nick,
+			"Erroneous nickname"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Check if nickname is already taken by another client
+	if (isNicknameInUse(new_nick, client.getFD())) {
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NICKNAMEINUSE, "*", new_nick,
+			"Nickname is already in use"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Store old nickname for notification (if changing nick)
+	std::string old_nick = client.getNickname();
+
+	// Set the new nickname
+	client.setNickname(new_nick);
+	std::cout << "Client fd " << client.getFD() << " nickname set to: " << new_nick << "\n";
+
+	// If client is already registered, notify about nick change
+	if (client.isRegistered()) {
+		std::string nick_change = ":" + old_nick + "!" + client.getUsername() +
+									"@localhost NICK :" + new_nick + "\r\n";
+		sendReply(client, nick_change);
+	}
+	
+	// Check if client can now be registered
+	// Registration requires: authenticated + nickname + username
+	if (!client.isRegistered() && client.isAuthenticated() &&
+		!client.getNickname().empty() && !client.getUsername().empty()) 
+	{
+		client.setRegistered(true);
+		sendWelcome(client);
+		std::cout << "Client fd " << client.getFD() << " is now fully registered\n";
+	}
+}
