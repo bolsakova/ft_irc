@@ -113,3 +113,101 @@ bool CommandHandler::isNicknameInUse(const std::string& nickname, int exclude_fd
 
 	return false;
 }
+
+/**
+ * @brief Send welcome messages (RPL_WELCOME through RPL_MYINFO) to client.
+ * Called after successful registration (PASS + NICK + USER complete)
+ * 
+ * @param client Newly registered client
+ * 
+ * Algorithm:
+ * 			1. Build RPL_WELCOME (001): "Welcome to the IRC Network nick!user@host"
+ * 			2. Build RPL_YOURHOST (002): "Your host is servername, version"
+ * 			3. Build RPL_CREATED (003): "This server was created <date>"
+ * 			4. Build RPL_MYINFO (004): "servername version user_modes chan_modes"
+ * 			5. Send each reply to client's output buffer
+ */
+void CommandHandler::sendWelcome(Client& client) {
+	// RPL_WELCOME (001): Welcome message with full client identifier
+	std::string reply001 = MessageBuilder::buildNumericReply(
+		m_server_name, RPL_WELCOME, client.getNickname(),
+		"Welcome to the Internet Relay Network " + client.getNickname() + "!" +
+		client.getUsername() + "@localhost"
+	);
+	sendReply(client, reply001);
+
+	// RPL_YOURHOST (002): Server information
+	std::string reply002 = MessageBuilder::buildNumericReply(
+		m_server_name, RPL_YOURHOST, client.getNickname(),
+		"Your host is " + m_server_name + ", running version 1.0"
+	);
+	sendReply(client, reply002);
+
+	// RPL_CREATED (003): Server creation date
+	std::string reply003 = MessageBuilder::buildNumericReply(
+		m_server_name, RPL_CREATED, client.getNickname(),
+		"This server was created 2025-12-21"
+	);
+	sendReply(client, reply003)
+	;
+	// RPL_MYINFO (004): Server name, version, and available modes
+	std::string reply004 = MessageBuilder::buildNumericReply(
+		m_server_name, RPL_MYINFO, client.getNickname(),
+		m_server_name + " 1.0 o o"
+	);
+	sendReply(client, reply004);
+}
+
+/**
+ * @brief Handle PASS command - authenticate client with server password.
+ * Format: PASS <password>
+ * 
+ * @param client Client sending the command
+ * @param msg Parsed message with command and parameters
+ * 
+ * Algorithm:
+ * 			1. Check if client is already registered -> error 462
+ * 			2. Check if password parameter exists -> error 461
+ * 			3. Extract password from params[0] or trailing
+ * 			4. Compare with server password
+ * 			5. If match: set client.setAuthenticated(true)
+ * 			6. If no match: send error 464 (ERR_PASSWDMISMATCH)
+ * 			7. Log authenticated result
+ */
+void CommandHandler::handlePass(Client& client, const Message& msg) {
+	// Check if client already completed registration
+	if (client.isRegistered()) {
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_ALREADYREGISTERED, client.getNickname(), "",
+			"You may not reregister"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Check if password parameter was provided
+	if (msg.params.empty() && msg.trailing.empty()) {
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NEEDMOREPARAMS, "*", "PASS",
+			"Not enough parameters"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Extract password (can be in params[0] or trailing)
+	std::string password = msg.params.empty() ? msg.trailing : msg.params[0];
+
+	// Verify password against server password
+	if (password == m_password) {
+		client.setAuthenticated(true);
+		std::cout << "Client fd " << client.getFD() << " authenticated successfully\n";
+	} else {
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_PASSWDMISMATCH, "*", "",
+			"Password incorrect"
+		);
+		sendReply(client, error);
+		std::cout << "Client fd " << client.getFD() << " authentication failed\n";
+	}
+}
