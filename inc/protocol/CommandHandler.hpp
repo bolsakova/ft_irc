@@ -4,6 +4,9 @@
 #include "../network/Client.hpp"
 #include "Parser.hpp"
 #include "Message.hpp"
+#include <map>
+#include <memory>
+#include <cctype>
 
 // forward declaration to avoid circular dependency
 class Server;
@@ -16,9 +19,9 @@ class Server;
  */
 class CommandHandler {
 	private:
-			Server& server;					// reference to server for client access
-			const std::string& password;	// server password for authemtication
-			const std::string server_name;	// server name for replies
+			Server& m_server;					// reference to server for client access
+			const std::string& m_password;	// server password for authemtication
+			const std::string m_server_name;	// server name for replies
 
 			/**
 			 * @brief Handle PASS command (password authentication)
