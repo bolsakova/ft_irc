@@ -77,6 +77,21 @@ class CommandHandler {
 			void sendReply(Client& client, const std::string& reply);
 
 	public:
+			/**
+			 * @brief Construct command handler
+			 * 
+			 * @param server Reference to server instance
+			 * @param password Server password for PASS authentication
+			 */
+			CommandHandler(Server& server, const std::string& password);
+
+			/**
+			 * @brief Process a complete IRC command from client
+			 * 
+			 * @param raw_command Raw command string (including \r\n) 
+			 * @param client Client who sent the command
+			 */
+			void handleCommand(const std::string& raw_command, Client& client);
 
 };
 
