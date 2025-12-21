@@ -286,3 +286,54 @@ void CommandHandler::handleNick(Client& client, const Message& msg) {
 		std::cout << "Client fd " << client.getFD() << " is now fully registered\n";
 	}
 }
+
+/**
+ * @brief Handle USER command - set username and realname.
+ * Format: USER <username> <hostname> <servername> :<realname>
+ * 
+ * @param client Client sending the command
+ * @param msg Parsed message with command and parameters
+ * 
+ * Algorithm:
+ * 			1. Check if already registered -> erorr 462
+ * 			2. Check parameter count (need 3 params + trailing) -> error 461
+ * 			3. Extract username from params[0]
+ * 			4. Extract realname from trailing
+ * 			5. Set client's username and realname
+ * 			6. Check if registration is now complete -> send welcome
+ */
+void CommandHandler::handleUser(Client& client, const Message& msg) {
+	// Check if client already completed registration
+	if (client.isRegistered()) {
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_ALREADYREGISTERED, client.getNickname(),
+			"You may not reregister"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Check parameter count
+	// USER command requires: <username> <hostname> <servername> :<realname>
+	// We need at least 3 parameters + trailing
+	if (msg.params.size() < 3 || msg.trailing.empty())
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NEEDMOREPARAMS, "*", "USER",
+			"Not enough parameters"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Extract username and realname
+	// params[0] = username, params[1] = hostname (ignored),
+	// params[2] = servername (ignored), trailing = realname
+	client.setUsername(msg.params[0]);
+	client.setRealname(msg.trailing);
+
+	std::cout << "Client fd " << client.getFD() << " username: " << msg.params[0]
+				<< ", realname: " << msg.trailing << "\n";
+
+	// 
+}
