@@ -23,83 +23,26 @@ class CommandHandler {
 			const std::string& m_password;		// server password for authemtication
 			const std::string m_server_name;	// server name for replies
 
-			/**
-			 * @brief Handle PASS command (password authentication)
-			 * 
-			 * @param client Client sending the command
-			 * @param msg Parsed message structure
-			 */
-			void handlePass(Client& client, const Message& msg);
-			
-			/**
-			 * @brief Handle NICK command (set/change nickname)
-			 * 
-			 * @param client Client sending the command
-			 * @param msg Parsed message structure
-			 */
-			void handleNick(Client& client, const Message& msg);
-			
-			/**
-			 * @brief Handle USER command (set username and realname)
-			 * 
-			 * @param client Client sending the command
-			 * @param msg Parsed message structure
-			 */
-			void handleUser(Client& client, const Message& msg);
+			// commands to handle
+			void handlePass(Client& client, const Message& msg);	// PASS
+			void handleNick(Client& client, const Message& msg);	// NICK
+			void handleUser(Client& client, const Message& msg);	// USER
+			void handlePing(Client& client, const Message& msg);	// PING
 
-			/**
-			 * @brief Check if nickname is already taken by another client
-			 * 
-			 * @param nickname Nickname to check
-			 * @param exclude_fd File descriptor to exclude from check (for nick changes)
-			 * @return True if nickname is is use, false otherwise
-			 */
-			bool isNicknameInUse(const std::string& nickname, int exclude_fd = -1);
+			bool isNicknameInUse(const std::string& nickname, int exclude_fd = -1);	// Check if nickname is already taken by another client
+			bool isValidNickname(const std::string& nickname);						// Validate nickname according to RFC 1459
 
-			/**
-			 * @brief Validate nickname according to RFC 1459
-			 * 
-			 * @param nickname Nickname to validate
-			 * @return True if valid, false otherwise
-			 */
-			bool isValidNickname(const std::string& nickname);
-
-			/**
-			 * @brief Send welcome messages (001-004) to newly registered client
-			 * 
-			 * @param client Client to send welcome to
-			 */
-			void sendWelcome(Client& client);
-
-			/**
-			 * @brief Append reply to client's output buffer
-			 * 
-			 * @param client Client to send to
-			 * @param reply Formatted IRC reply string
-			 */
-			void sendReply(Client& client, const std::string& reply);
+			void sendWelcome(Client& client);							// Send welcome messages (001-004) to newly registered client
+			void sendReply(Client& client, const std::string& reply);	// Append reply to client's output buffer
 
 	public:
-			/**
-			 * @brief Construct command handler
-			 * 
-			 * @param server Reference to server instance
-			 * @param password Server password for PASS authentication
-			 */
-			CommandHandler(Server& server, const std::string& password);
-			~CommandHandler() = default;
-
+			CommandHandler(Server& server, const std::string& password);	// Constructor for command handler
+			~CommandHandler() = default;									// Destructor
 			// deleted (contains references)
 			CommandHandler(const CommandHandler&) = delete;
 			CommandHandler& operator=(const CommandHandler&) = delete;
-			
-			/**
-			 * @brief Process a complete IRC command from client
-			 * 
-			 * @param raw_command Raw command string (including \r\n) 
-			 * @param client Client who sent the command
-			 */
-			void handleCommand(const std::string& raw_command, Client& client);
+
+			void handleCommand(const std::string& raw_command, Client& client);	// Process a complete IRC command from client
 
 };
 

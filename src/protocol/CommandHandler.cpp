@@ -347,6 +347,57 @@ void CommandHandler::handleUser(Client& client, const Message& msg) {
 }
 
 /**
+ * @brief Handle PING command - respond with PONG to keep connection alive.
+ * Format: PING <token> or PING :<token>
+ * 
+ * @param client Client sending the command
+ * @param msg Parsed message with command and parameters
+ * 
+ * Algorithm:
+ * 			1. Check if client is registered -> error 451
+ * 			2. Extract token from params[0] or trailing
+ * 			3. If token is empty -> use server_name as default
+ * 			4. Build PONG response: :<server> PONG <server> :<token>
+ * 			5. Send PONG to client
+ */
+void CommandHandler::handlePing(Client& client, const Message& msg)
+{
+	// Check if client is registered (must complete PASS/NICK/USER first)
+	if (!client.isRegistered()) {
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOTREGISTERED,
+			client.getNickname().empty() ? "*" : client.getNickname(),
+			"",
+			"You have not registered"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Extract token (can be in params[0] or trailing)
+	std::string token;
+	if (!msg.params.empty())
+		token = msg.params[0];
+	else if (!msg.trailing.empty())
+		token = msg.trailing;
+	else
+		token = m_server_name;	// Default token if none provided
+	
+	// Build PONG response
+	// Format: :<server> PONG <server> :<token>
+	std::vector<std::string> pong_params;
+	pong_params.push_back(m_server_name);
+
+	std::string pong_reply = MessageBuilder::buildCommandMessage(
+		m_server_name, "PONG", pong_params, token
+	);
+	
+	sendReply(client, pong_reply);
+
+	std::cout << "Client fd " << client.getFD() << " PING/PONG: " << token << "\n";
+}
+
+/**
  * @brief Main command dispatcher - routes commands to appropriate handlers.
  * 
  * @param raw_command Complete IRC command with \r\n
@@ -376,6 +427,8 @@ void CommandHandler::handleCommand(const std::string& raw_command, Client& clien
 			handleNick(client, msg);
 		else if (msg.command == "USER")
 			handleUser(client, msg);
+		else if (msg.command == "PING")
+			handlePing(client, msg);
 		else {
 			// Command not recognized or not implemented
 			std::string error = MessageBuilder::buildErrorReply(
