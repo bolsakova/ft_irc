@@ -1,5 +1,5 @@
-#ifndef MESSAGE_HPP
-#define MESSAGE_HPP
+#ifndef MESSAGEBUILDER_HPP
+#define MESSAGEBUILDER_HPP
 
 #include <string>
 #include <vector>
@@ -83,6 +83,11 @@ class MessageBuilder {
 			static void validateLength(const std::string& message);
 
 	public:
+			MessageBuilder() = delete;
+			~MessageBuilder() = delete;
+			MessageBuilder(const MessageBuilder&) = delete;
+			MessageBuilder& operator=(const MessageBuilder&) = delete;
+	
 			/**
 			 * @brief Build numeric reply message (001,002,003...)
 			 * @param server Server name sending the reply

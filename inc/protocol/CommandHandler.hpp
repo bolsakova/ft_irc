@@ -3,7 +3,7 @@
 
 #include "../network/Client.hpp"
 #include "Parser.hpp"
-#include "Message.hpp"
+#include "MessageBuilder.hpp"
 #include <map>
 #include <memory>
 #include <cctype>
@@ -20,7 +20,7 @@ class Server;
 class CommandHandler {
 	private:
 			Server& m_server;					// reference to server for client access
-			const std::string& m_password;	// server password for authemtication
+			const std::string& m_password;		// server password for authemtication
 			const std::string m_server_name;	// server name for replies
 
 			/**
@@ -87,7 +87,12 @@ class CommandHandler {
 			 * @param password Server password for PASS authentication
 			 */
 			CommandHandler(Server& server, const std::string& password);
+			~CommandHandler() = default;
 
+			// deleted (contains references)
+			CommandHandler(const CommandHandler&) = delete;
+			CommandHandler& operator=(const CommandHandler&) = delete;
+			
 			/**
 			 * @brief Process a complete IRC command from client
 			 * 

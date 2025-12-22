@@ -1,4 +1,4 @@
-#include "../../inc/protocol/Message.hpp"
+#include "../../inc/protocol/MessageBuilder.hpp"
 
 /**
  * @brief Check if the message has a prefix

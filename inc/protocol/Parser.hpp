@@ -4,7 +4,7 @@
 #include <string>
 #include <iostream>
 #include <stdexcept>
-#include "Message.hpp"
+#include "MessageBuilder.hpp"
 
 /**
  * @brief IRC Protocol Parser
@@ -56,6 +56,11 @@ class Parser {
 				std::string& trailing);
 
 	public:
+			Parser() = delete;
+			~Parser() = delete;
+			Parser(const Parser&) = delete;
+			Parser& operator=(const Parser&) = delete;
+
 			/**
 			 * @brief Parse a raw IRC message into Message structure
 			 * 
