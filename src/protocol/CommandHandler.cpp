@@ -335,5 +335,59 @@ void CommandHandler::handleUser(Client& client, const Message& msg) {
 	std::cout << "Client fd " << client.getFD() << " username: " << msg.params[0]
 				<< ", realname: " << msg.trailing << "\n";
 
-	// 
+	// Check if client can now be registered
+	// Registration requires: authenticated + nickname + username
+	if (!client.isRegistered() && client.isAuthenticated() &&
+		!client.getNickname().empty() && !client.getUsername().empty())
+	{
+		client.setRegistered(true);
+		sendWelcome(client);
+		std::cout << "Client fd " << client.getFD() << " is now fully registered\n";
+	}
+}
+
+/**
+ * @brief Main command dispatcher - routes commands to appropriate handlers.
+ * 
+ * @param raw_command Complete IRC command with \r\n
+ * @param client Client who sent the command
+ * 
+ * Algorithm:
+ * 			1. Try to parse command using Parser::parse()
+ * 			2. Log the parsed command
+ * 			3. Route based on command name:
+ * 				- "PASS" -> handlePass()
+ * 				- "NICK" -> handleNick()
+ * 				- "USER" -> handleUser()
+ * 				- unknown -> ERR_UNKNOWNCOMMAND (421)
+ * 			4. Catch parsing errors and log them
+ */
+void CommandHandler::handleCommand(const std::string& raw_command, Client& client) {
+	try {
+		// Parse the raw IRC message into structured format
+		Message msg = Parser::parse(raw_command);
+
+		std::cout << "Parsed command: " << msg.command << " from fd " << client.getFD() << "\n";
+
+		// Route to appropriate command handler
+		if (msg.command == "PASS")
+			handlePass(client, msg);
+		else if (msg.command == "NICK")
+			handleNick(client, msg);
+		else if (msg.command == "USER")
+			handleUser(client, msg);
+		else {
+			// Command not recognized or not implemented
+			std::string error = MessageBuilder::buildErrorReply(
+				m_server_name, ERR_UNKNOWNCOMMAND,
+				client.getNickname().empty() ? "*" : client.getNickname(),
+				msg.command, "Unknown command"
+			);
+			sendReply(client, error);
+		}
+	} catch (const std::exception& e) {
+		// Log parsing errors but don't crash the server
+		std::cerr << "Error parsing command from fd " << client.getFD()
+				<< ": " << e.what() << "\n";
+	}
 }
