@@ -19,7 +19,7 @@ IRC
 	Trailing			- всегда последний параметр, может 
 							содержать пробелы, начинается с :
 	
- *Примеры:*
+	**Примеры:**
 		Client → Server:
 		NICK tanja
 
@@ -158,6 +158,170 @@ IRC
                               NICK + USER ok
                                      ↓
                               [REGISTERED] → может использовать все команды
+
+8. ***Команды регистрации клиента***
+ 
+ 1) ***PASS*** - Аутентификация по паролю
+	
+	**Назначение:**
+	   - Аутентифицирует клиента на сервере с паролем
+	   - Должна быть отправлена *до* NICK и USER (если сервер требует пароль)
+	   - Опциональна, если сервер не требует пароль
+	
+	**Формат:** PASS <password>
+
+	**Примеры:**
+		Client → Server:  PASS secretpassword123
+		Client → Server:  PASS mypass
+	
+	**Правила и проверки:**
+	   1. Момент использования:
+	      - можно использовать только *до завершения регистрации*
+		  - если клиент уже зарегистрирован (REGISTERED) -> ERR_ALREADYREGISTERED (462)
+	   2. Параметры:
+	      - обязательно параметр <password>
+		  - если не указан -> ERR_NEEDMOREPARAMS (461)
+	   3. Проверка пароля:
+	      - сравнивается с паролем сервера
+		  - если совпадает -> client.setAuthenticated(true)
+		  - если не совпадает -> ERR_PASSWDMISMATCH (464)
+	
+	**Состояние клиента после PASS:**
+		UNREGISTERED + password correct -> AUTHENTICATED
+	
+	**ВАЖНО**
+	   - PASS не завершвет регистрацию сама по себе
+	   - нужны также NICK и USER для полной регистрации
+
+ 2) ***NICK*** - Установка/смена nickname
+	
+	**Назначение:**
+	   - Устанавливает или меняет nickname клиента
+	   - Nickname - это уникальный идентификатор пользователя на сервере
+	
+	**Формат:** NICK <nickname>
+
+	**Примеры:**
+		Client → Server:  NICK tanja
+		Client → Server:  NICK alice123
+	
+	**Правила для nickname (RFC 1459):**
+	   1. Длина:
+	      - Минимум: 1 символ
+		  - Максимум: 9 символов
+	   2. Первый символ:
+	      - Буква (A-Z, a-z)
+		  - Или специальный: [ ] \  _ ^ { | }`
+	   3. Остальные символы:
+	      - Буквы (A-Z, a-z)
+		  - Цифры (0-9)
+		  - Специальные: [ ] \  _ ^ { | }`
+		  - Дефис (-)
+	   4. Запрещено:
+	      - Начинаться с цифры
+		  - Начинаться с дефиса (-)
+		  - Содержать пробелы
+
+	**Проверки и ошибки:**
+	   1. Параметр не указан:
+	      - если NICK без параметра -> ERR_NONICKNAMEGIVEN (431)
+	   2. Неверный формат:
+		  - если не соответствует правилам -> ERR_ERRONEOUSNICKNAME (432)
+		  - Примеры: 123nick (начинается с цифры), nick name (пробел)
+	   3. Nickname занят:
+	      - если другой клиент уже использует -> ERR_NICKNAMEINUSE (433)
+	
+	**Поведение:**
+	   - *До регистрации*: устанавливает nickname
+	   - *После регистрации*: меняет nickname + отправляет уведомление:
+	   		:oldnick!user@localhost NICK :newnick
+	
+	**Влияние на регистрацию:**
+	   - Если выполнены все условия:
+	   		authenticated = true (PASS ok)
+			nickname != empty (NICK ok)
+			username != empty (USER ok)
+			-> client.setRegistered(true) + отправка RPL_WELCOME (001-004)
+
+ 3) ***USER*** - Установка username и realname
+	
+	**Назначение:**
+	   - Устанавливает username (имя пользователя) и realname (настоящее имя)
+	   - используется один раз при регистрации
+	
+	**Формат (RFC 1459):** USER <username> <hostname> <servername> :<realname>
+
+	**Параметры:**
+	   1. <username> - имя пользователя (обычно login)
+	   2. <hostname> - имя хоста (игнорируется сервером, клиент может послать что угодно)
+	   3. <servername> - имя сервера (игнорируется, обычно *)
+	   4. :<realname> - настоящее имя (trailing parameter, может содержать пробелы)
+
+	**Примеры:**
+		Client → Server:  USER tanja 0 * :Tanja Bolsakova
+		Client → Server:  USER alice localhost * :Alice Wonderland
+		Client → Server:  USER bob 0 * :Bob
+	
+	**Правила и проверки:**
+	   1. Момент использования:
+	      - можно использовать только *до завершения регистрации*
+		  - если клиент уже зарегистрирован -> ERR_ALREADYREGISTERED (462)
+	   2. Параметры:
+	      - нужно минимум 3 параметра + trailing
+		  - если меньше -> ERR_NEEDMOREPARAMS (461)
+	   3. Что извлекается:
+	      - username = params[0]
+	      - realname = trailing
+		  - params[1] и params[2] игнорируются (hostname, servername)
+	
+	**Влияние на регистрацию:**
+	   - После успешной команды USER проверяется:
+	   		authenticated = true (PASS ok)
+			nickname != empty (NICK ok)
+			username != empty (USER ok)
+			-> client.setRegistered(true) + отправка RPL_WELCOME (001-004)
+
+ 4) ***PING/PONG*** - Keepalive механизм
+	
+	**Назначение:**
+	   - Проверка активности соединения ()
+	   - используется один раз при регистрации
+	
+	**Формат (RFC 1459):** USER <username> <hostname> <servername> :<realname>
+
+	**Параметры:**
+	   1. <username> - имя пользователя (обычно login)
+	   2. <hostname> - имя хоста (игнорируется сервером, клиент может послать что угодно)
+	   3. <servername> - имя сервера (игнорируется, обычно *)
+	   4. :<realname> - настоящее имя (trailing parameter, может содержать пробелы)
+
+	**Примеры:**
+		Client → Server:  USER tanja 0 * :Tanja Bolsakova
+		Client → Server:  USER alice localhost * :Alice Wonderland
+		Client → Server:  USER bob 0 * :Bob
+	
+	**Правила и проверки:**
+	   1. Момент использования:
+	      - можно использовать только *до завершения регистрации*
+		  - если клиент уже зарегистрирован -> ERR_ALREADYREGISTERED (462)
+	   2. Параметры:
+	      - нужно минимум 3 параметра + trailing
+		  - если меньше -> ERR_NEEDMOREPARAMS (461)
+	   3. Что извлекается:
+	      - username = params[0]
+	      - realname = trailing
+		  - params[1] и params[2] игнорируются (hostname, servername)
+	
+	**Влияние на регистрацию:**
+	   - После успешной команды USER проверяется:
+	   		authenticated = true (PASS ok)
+			nickname != empty (NICK ok)
+			username != empty (USER ok)
+			-> client.setRegistered(true) + отправка RPL_WELCOME (001-004)
+
+
+
+
 
 
 **Необходимость использования статических методов**

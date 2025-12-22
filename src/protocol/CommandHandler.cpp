@@ -232,7 +232,7 @@ void CommandHandler::handleNick(Client& client, const Message& msg) {
 	// Check if nickname parameter was provided
 	if (msg.params.empty() && msg.trailing.empty()) {
 		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NONICKNAMEGIVEN, "*",
+			m_server_name, ERR_NONICKNAMEGIVEN, "*", "",
 			"No nickname given"
 		);
 		sendReply(client, error);
@@ -306,7 +306,7 @@ void CommandHandler::handleUser(Client& client, const Message& msg) {
 	// Check if client already completed registration
 	if (client.isRegistered()) {
 		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_ALREADYREGISTERED, client.getNickname(),
+			m_server_name, ERR_ALREADYREGISTERED, client.getNickname(), "",
 			"You may not reregister"
 		);
 		sendReply(client, error);
