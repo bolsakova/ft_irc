@@ -10,17 +10,17 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "../../inc/network/Server.hpp"
-#include <sys/socket.h>   // socket, bind, listen, accept
-#include <netinet/in.h>   // sockaddr_in, htons
-#include <arpa/inet.h>    // inet_ntoa (если нужно)
-#include <fcntl.h>        // fcntl (для non-blocking)
-#include <poll.h>         // poll, struct pollfd
-#include <unistd.h>       // close, read, write
 #include <cstring>        // strerror, memset
 #include <iostream>       // cout, cerr
 #include <cerrno>         // errno
 #include <csignal>        // signal/sigaction (SIGPIPE)
+#include <fcntl.h>        // fcntl (для non-blocking)
+#include <unistd.h>       // close, read, write
+#include <sys/socket.h>   // socket, bind, listen, accept
+#include <netinet/in.h>   // sockaddr_in, htons
+#include <arpa/inet.h>    // inet_ntoa (если нужно)
+#include "../../inc/network/Server.hpp"
+#include "../../inc/network/net.hpp"
 #include "../../inc/protocol/CommandHandler.hpp"
 
 /*EAGAIN/EWOULDBLOCK - больше нет ожидающих подключений
@@ -45,41 +45,6 @@ static void ignore_sigpipe()
 	sa.sa_handler = SIG_IGN;
 	sigemptyset(&sa.sa_mask);
 	sigaction(SIGPIPE, &sa, NULL);
-}
-
-static int parse_port_strict(const std::string &port_str)
-{
-	// CHANGED: strict validation instead of atoi() (atoi allows "12abc" -> 12).
-	// Accept only digits and range 1..65535.
-	if (port_str.empty())
-		throw std::runtime_error("Invalid port number: (empty)");
-
-	long port = 0;
-	for (std::size_t i = 0; i < port_str.size(); ++i)
-	{
-		if (port_str[i] < '0' || port_str[i] > '9')
-			throw std::runtime_error("Invalid port number: " + port_str);
-		port = port * 10 + (port_str[i] - '0');
-		if (port > 65535)
-			throw std::runtime_error("Invalid port number: " + port_str);
-	}
-	if (port <= 0 || port > 65535)
-		throw std::runtime_error("Invalid port number: " + port_str);
-	return static_cast<int>(port);
-}
-
-static int set_non_blocking(int fd)
-{
-	// This function sets a file descriptor to non-blocking mode.
-	// Non-blocking is required for poll()/epoll() architecture without hanging.
-	// fcntl(fd, F_GETFL) -> get current flags
-	// fcntl(fd, F_SETFL) -> set new flags
-	int flags = fcntl(fd, F_GETFL, 0);
-	if (flags < 0)
-		return -1;
-	if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0)
-		return -1;
-	return 0;
 }
 
 Server::Server(const std::string& port, const std::string& password)
@@ -253,6 +218,7 @@ void Server::enablePolloutForFD(int fd)
 		}
 	}
 }
+
 void Server::disablePolloutForFd(int fd)
 {
 	// 1. Проходим по всем отслеживаемым дескрипторам
@@ -269,18 +235,6 @@ void Server::disablePolloutForFd(int fd)
 	}
 }
 
-// disable POLLIN for fd (when peer closed input)
-static void disable_pollevent(std::vector<pollfd> &poll_fds, int fd, short flag)
-{
-	for (size_t i = 0; i < poll_fds.size(); ++i)
-	{
-		if (poll_fds[i].fd == fd)
-		{
-			poll_fds[i].events = poll_fds[i].events & (~flag);
-			return;
-		}
-	}
-}
 
 /**
 recv() reads data from the socket.
@@ -400,7 +354,9 @@ void Server::sendData(int fd)
 	if (!client.hasDataToSend())
 		disablePolloutForFd(fd);
 	// If peer already closed and we finished sending,now we can close our side too
-	if (client.isPeerClosed())
+	// if (client.isPeerClosed()) // TODO add && !client.hasDataToSend()), delete after testing
+	// disconnect only after we flushed everything
+	if (client.isPeerClosed() && !client.hasDataToSend())
 		disconnectClient(fd);
 	return;
 }
