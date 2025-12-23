@@ -359,9 +359,9 @@ void Server::sendData(int fd)
 	// protect from SIGPIPE on Linux with MSG_NOSIGNAL (extra safety).
 	// We still ignore SIGPIPE globally, but this makes send() itself safer.
 	int flags = 0;
-#ifdef MSG_NOSIGNAL
-	flags = MSG_NOSIGNAL;
-#endif
+	#ifdef MSG_NOSIGNAL
+		flags = MSG_NOSIGNAL;
+	#endif
 	ssize_t sent = send(fd, out.c_str(), out.size(), flags);
 	//  Обработка ошибок send()
 	if (sent < 0)

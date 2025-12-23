@@ -70,9 +70,6 @@ const std::string& Channel::getName() const{return m_name;}
 // Читаем текущий топик канала для ответов клиентам.
 const std::string& Channel::getTopic() const{return m_topic;}
 
-// Получаем текущий ключ канала, чтобы проверять JOIN.
-const std::string& Channel::getKey() const{return m_key;}
-
 // Добавляем участника: берем его fd из объекта Client и сохраняем в мапу.
 // Если такой fd уже есть, мы просто обновляем указатель (на случай реконнекта).
 void Channel::addMember(Client* client)
