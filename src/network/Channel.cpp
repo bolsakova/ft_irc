@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/23 16:08:00 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/23 16:43:30 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/23 17:00:55 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -61,6 +61,9 @@ Channel::~Channel() {}
 // Устанавливаем топик канала: хранится строка, которую видят участники.
 void Channel::setTopic(const std::string& topic){m_topic = topic;}
 
+// Проверяем, задан ли топик (не пустая строка).
+bool Channel::hasTopic() const{return !m_topic.empty();}
+
 // Возвращаем имя канала, чтобы сервер мог идентифицировать объект при маршрутизации.
 const std::string& Channel::getName() const{return m_name;}
 
@@ -76,8 +79,7 @@ void Channel::addMember(Client* client)
 {
 	if (!client)
 		return;
-	int fd = client->getFD();
-	m_members[fd] = client;
+	m_members[client->getFD()] = client;
 }
 
 // Удаляем участника по его fd (используется при PART/QUIT). Параллельно снимаем операторские права, если были.
@@ -105,12 +107,6 @@ void Channel::removeOperator(int fd){m_operators.erase(fd);}
 // Проверяем, является ли пользователь оператором канала.
 bool Channel::isOperator(int fd) const{return m_operators.find(fd) != m_operators.end();}
 
-// Устанавливаем ключ (пароль) на канал для режима +k.
-void Channel::setKey(const std::string& key){m_key = key;}
-
-// Снимаем ключ канала (эквивалент -k).
-void Channel::removeKey(){m_key.clear();}
-
 // Устанавливаем лимит пользователей +l (0 или меньше = нет лимита).
 void Channel::setUserLimit(int limit){m_user_limit = limit;}
 
@@ -119,6 +115,12 @@ void Channel::setInviteOnly(bool enable){m_invite_only = enable;}
 
 // Включаем/выключаем защиту топика +t (только операторы могут менять).
 void Channel::setTopicProtected(bool enable){m_topic_protected = enable;}
+
+// Устанавливаем ключ (пароль) на канал для режима +k.
+void Channel::setKey(const std::string& key){m_key = key;}
+
+// Снимаем ключ канала (эквивалент -k).
+void Channel::removeKey(){m_key.clear();}
 
 // Проверяем, включен ли режим +i.
 bool Channel::isInviteOnly() const{return m_invite_only;}
@@ -134,3 +136,24 @@ const std::string& Channel::getKey() const{return m_key;}
 
 // Получаем текущий лимит пользователей.
 int Channel::getUserLimit() const{return m_user_limit;}
+
+// Добавляем пользователя в список приглашенных (для режима +i).
+void Channel::addInvited(int fd){m_invited.insert(fd);}
+
+// Проверяем, есть ли у пользователя приглашение.
+bool Channel::isInvited(int fd) const{return m_invited.find(fd) != m_invited.end();}
+
+// Убираем пользователя из списка приглашенных (после входа или revoke).
+void Channel::removeInvited(int fd){m_invited.erase(fd);}
+
+// Рассылаем сообщение всем участникам, опционально исключая отправителя по fd.
+void Channel::broadcast(const std::string& message, int exclude_fd)
+{
+	for (std::map<int, Client*>::iterator it = m_members.begin(); it != m_members.end(); ++it)
+	{
+		if (it->first == exclude_fd)
+			continue;
+		if (it->second)
+			it->second->appendToOutBuf(message);
+	}
+}

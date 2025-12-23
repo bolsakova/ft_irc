@@ -45,6 +45,7 @@ public:
     void setTopic(const std::string& topic);
     const std::string& getName() const;
     const std::string& getTopic() const;
+    bool hasTopic() const;
 
     // === Membership ===
     void addMember(Client* client);
@@ -63,12 +64,20 @@ public:
     void setInviteOnly(bool enable);
     void setTopicProtected(bool enable);
     void setKey(const std::string& key);
+    void removeKey();
     int getUserLimit() const;
     const std::string& getKey() const;
-    void removeKey();
     bool hasKey() const;
     bool isInviteOnly() const;
     bool isTopicProtected() const;
+
+    // === Invites ===
+    void addInvited(int fd);
+    bool isInvited(int fd) const;
+    void removeInvited(int fd);
+
+    // === Utils ===
+    void broadcast(const std::string& message, int exclude_fd = -1);
 };
 
 #endif // CHANNEL_HPP
