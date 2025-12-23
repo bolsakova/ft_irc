@@ -25,10 +25,14 @@ class Client
 		std::string m_nickname;
 		std::string m_username;
 		std::string m_realname;
-		bool m_is_authenticated;
-		bool m_is_registered;
+		bool 		m_authenticated;
+		bool 		m_registered;
 		// peer closed its write side (recv returned 0)
 		bool		m_peer_closed;
+		// вisconnect management
+		bool        m_should_disconnect; // Should server disconnect this client?
+		std::string m_quit_reason;       // Reason for disconnection (for QUIT)
+
 	
 	public:
 		// deleted OCF methods (canonical but disabled): Client manages a unique fd
@@ -39,40 +43,41 @@ class Client
 		explicit Client(int fd);
 		~Client();
 
-		// === Client identity ===
+		// = Client identity =
 		int getFD() const;
 
-		// === Incoming data handling (input buffer) ===
-		void appendToInBuf(const std::string &data);
-		bool hasCompleteCmd() const;
-		std::string extractNextCmd();          // extracts one command ending with \r\n
-		const std::string& getInBuf() const;
-
-		// === Outgoing data handling (output buffer) ===
-		void appendToOutBuf(const std::string &data);
-		const std::string& getOutBuf() const;
-		void consumeOutBuf(std::size_t count);
-		bool hasDataToSend() const;
-
-		// === Connection state ===
-		void markPeerClosed();
-		bool isPeerClosed() const;
-
-		// === Name management === 
+		// = Name getters/setters =
 		void setNickname(const std::string& nickname);
 		void setUsername(const std::string& username);
 		void setRealname(const std::string& realname);
 		const std::string& getNickname() const;
 		const std::string& getUsername() const;
 		const std::string& getRealname() const;
-
-		// === Authentication state === 
+		
+		// = Authentication and Registration state =
 		void setAuthenticated(bool auth);
 		bool isAuthenticated() const;
-
-		// === Registration state === 
 		void setRegistered(bool reg);
 		bool isRegistered() const;
+
+		// = Incoming data handling (input buffer) =
+		void appendToInBuf(const std::string &data);
+		bool hasCompleteCmd() const;
+		std::string extractNextCmd();          // extracts one command ending with \r\n
+		const std::string& getInBuf() const;
+
+		// = Outgoing data handling (output buffer) =
+		void appendToOutBuf(const std::string &data);
+		const std::string& getOutBuf() const;
+		void consumeOutBuf(std::size_t count);
+		bool hasDataToSend() const;
+
+		// = Connection state =
+		void markPeerClosed();
+		bool isPeerClosed() const;
+		void markForDisconnect(const std::string& reason);
+		bool shouldDisconnect() const;
+		const std::string& getQuitReason() const;
 };
 
 #endif
