@@ -397,13 +397,62 @@ void CommandHandler::handlePing(Client& client, const Message& msg)
 	std::cout << "Client fd " << client.getFD() << " PING/PONG: " << token << "\n";
 }
 
-// /**
-//  * 
-//  */
-// void CommandHandler::handleQuit(Client& client, const Message& msg)
-// {
+/**
+ * @brief Handle QUIT command - disconnect cliet from server.
+ * Format: QUIT [:<reason>]
+ * 
+ * @param client Client sending the command
+ * @param msg Parsed message with command and parameters
+ * 
+ * Algorithm:
+ * 			1. Extract reason from trailing (or use default "Client exited")
+ * 			2. Build QUIT message with client prefix
+ * 			3. Find all channels where client is a member
+ * 			4. Broadcast QUIT to all channel members
+ * 			5. Remove client from all channels
+ * 			6. Mark client for disconnection
+ * 			7. Log quit action
+ * 
+ * @note Client can use QUIT even without registration
+ */
+void CommandHandler::handleQuit(Client& client, const Message& msg)
+{
+	// Extract quit reason (optional)
+	std::string reason = msg.trailing.empty() ? "Client exited" : msg.trailing;
+
+	std::cout << "Client fd " << client.getFD() << " quit: " << reason << "\n";
+
+	// Build QUIT message to broadcast to channels
+	// Format: :nick!user@host QUIT :reason
+	std::string quit_msg;
+	if (client.isRegistered()) {
+		std::string prefix = client.getNickname() + "!" +
+							client.getUsername() + "@localhost";
+		std::vector<std::string> empty_params;
+		quit_msg = MessageBuilder::buildCommandMessage(
+			prefix, "QUIT", empty_params, reason
+		);
+
+		// Get all channels and broadcast QUIT to channels where client is a member
+		const std::map<std::string, std::unique_ptr<Channel>>& channels = m_server.getChannels();
+
+		for (std::map<std::string, std::unique_ptr<Channel>>::const_iterator it = channels.begin();
+			it != channels.end(); ++it)
+		{
+			Channel* chan = it->second.get();
+			if (chan && chan->isMember(client.getFD())) {
+				// Broadcast QUIT to all members of this channel
+				chan->broadcast(quit_msg);
+				// Remove client from channel
+				chan->removeMember(client.getFD());
+			}
+		}
+	}
 	
-// }
+	// Mark client for disconnection
+	// Server will handle actual disconnection in main loop
+	client.markForDisconnect(reason);
+}
 
 /**
  * @brief Main command dispatcher - routes commands to appropriate handlers.
