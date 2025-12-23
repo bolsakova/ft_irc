@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/23 15:57:49 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/23 16:14:33 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/23 16:28:43 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -35,11 +35,25 @@ private:
     int m_user_limit;                          // +l (лимит пользователей, 0 = нет лимита)
 
 public:
-    //Default constructor initializes empty channel metadata and disabled modes.
+    // OCF
     Channel();
     Channel(const Channel& src);
     Channel& operator=(const Channel& rhs);
     ~Channel();
+
+    // === Metadata ===
+    void setTopic(const std::string& topic);
+    void setKey(const std::string& key);
+    const std::string& getName() const;
+    const std::string& getTopic() const;
+    const std::string& getKey() const;
+
+    // === Membership ===
+    void addMember(Client* client);
+    void removeMember(int fd);
+    bool isMember(int fd) const;
+    const std::map<int, Client*>& getMembers() const;
+    bool isEmpty() const;
 };
 
 #endif // CHANNEL_HPP
