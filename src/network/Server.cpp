@@ -471,8 +471,3 @@ void Server::run()
 		}
 	}
 }
-
-// TANJA: new method for Command Handler
-const std::map<int, std::unique_ptr<Client>>& Server::getClients() const {
-    return m_clients;
-}
