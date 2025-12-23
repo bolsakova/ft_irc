@@ -87,6 +87,33 @@ Server::~Server()
 	m_poll_fds.clear();
 }
 
+// Найти канал по имени (возвращает nullptr, если не найден).
+Channel* Server::findChannel(const std::string& name)
+{
+	std::map<std::string, std::unique_ptr<Channel> >::iterator it = m_channels.find(name);
+	if (it == m_channels.end())
+		return NULL;
+	return it->second.get();
+}
+
+// Создать канал, если его ещё нет; вернуть указатель на существующий/новый.
+Channel* Server::createChannel(const std::string& name)
+{
+	Channel* existing = findChannel(name);
+	if (existing)
+		return existing;
+	std::unique_ptr<Channel> ch(new Channel());
+	Channel* raw = ch.get();
+	m_channels[name] = std::move(ch);
+	return raw;
+}
+
+// Удалить канал по имени (если существует).
+void Server::removeChannel(const std::string& name){m_channels.erase(name);}
+
+// Получить карту всех каналов (read-only доступ).
+const std::map<std::string, std::unique_ptr<Channel>>& Server::getChannels() const{return m_channels;}
+
 void Server::initSocket(const std::string &port_str)
 {
 	int port;
@@ -141,14 +168,13 @@ void Server::initSocket(const std::string &port_str)
 	// std::cout << "Listening on port " << port << " (non-blocking)" << std::endl;
 	// return;
 }
+
 /*
 IPv4 xxx.xxx.xxx.xxx 32-бит→ всего ≈ 4.3 миллиарда адресов.
 IPv6 xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx 128-бит → ≈ 340 секстиллионов адресов (> чем атомов в Солнечной системе).
 socklen_t - POSIX определяет универсальный и переносимый тип для хранения длины адресных структур в сетевых вызовах.
 работает на любых ОС (32 и 64 битных), где типы могут отличаться размерами.
-
 */
-
 void Server::acceptClient()
 {
 	while (true)
@@ -239,9 +265,9 @@ void Server::disablePolloutForFd(int fd)
 /**
 recv() reads data from the socket.
 For a non-blocking socket:
-	- >0  → read this nb of bytes
-	-  0  → client closed the connection
-	- <0  → error (including EAGAIN/EWOULDBLOCK)
+- >0  → read this nb of bytes
+- =0  → client closed the connection
+- <0  → error (including EAGAIN/EWOULDBLOCK)
 */
 void Server::receiveData(int fd)
 {
