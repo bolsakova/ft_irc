@@ -1,4 +1,4 @@
-#include "inc/protocol/Message.hpp"
+#include "inc/protocol/MessageBuilder.hpp"
 #include <iostream>
 #include <cassert>
 
@@ -79,7 +79,7 @@ void testErrorMessages() {
 
 	// Test 1: Nickname in use (433)
 	{
-		std::string result = MessageBuilder::buildError(
+		std::string result = MessageBuilder::buildErrorReply(
 			"ircserv", 433, "*", "tanja", "Nickname is already in use"
 		);
 		testBuilder(
@@ -91,7 +91,7 @@ void testErrorMessages() {
 
 	// Test 2: No such nick (401)
 	{
-		std::string result = MessageBuilder::buildError(
+		std::string result = MessageBuilder::buildErrorReply(
 			"ircserv", 401, "alice", "bob", "No such nick/channel"
 		);
 		testBuilder(
@@ -103,7 +103,7 @@ void testErrorMessages() {
 
 	// Test 3: No such channel (403)
 	{
-		std::string result = MessageBuilder::buildError(
+		std::string result = MessageBuilder::buildErrorReply(
 			"ircserv", 403, "alice", "#test", "No such channel"
 		);
 		testBuilder(
@@ -115,7 +115,7 @@ void testErrorMessages() {
 
 	// Test 4: Not enough parameters (461)
 	{
-		std::string result = MessageBuilder::buildError(
+		std::string result = MessageBuilder::buildErrorReply(
 			"ircserv", 461, "alice", "JOIN", "Not enough parameters"
 		);
 		testBuilder(
@@ -134,7 +134,7 @@ void testCommandMessages() {
 
 	// Test 1: PRIVMSG with trailing
     {
-        std::string result = MessageBuilder::buildCommand(
+        std::string result = MessageBuilder::buildCommandMessage(
             "alice!user@host", "PRIVMSG", {"bob"}, "Hello there!"
         );
         testBuilder(
@@ -146,7 +146,7 @@ void testCommandMessages() {
     
     // Test 2: JOIN without trailing
     {
-        std::string result = MessageBuilder::buildCommand(
+        std::string result = MessageBuilder::buildCommandMessage(
             "alice!user@host", "JOIN", {"#channel"}
         );
         testBuilder(
@@ -158,7 +158,7 @@ void testCommandMessages() {
 
 	// Test 3: PART with trailing
     {
-        std::string result = MessageBuilder::buildCommand(
+        std::string result = MessageBuilder::buildCommandMessage(
             "alice!user@host", "PART", {"#channel"}, "Goodbye!"
         );
         testBuilder(
@@ -170,7 +170,7 @@ void testCommandMessages() {
     
     // Test 4: MODE with multiple params
     {
-        std::string result = MessageBuilder::buildCommand(
+        std::string result = MessageBuilder::buildCommandMessage(
             "alice!user@host", "MODE", {"#channel", "+o", "bob"}
         );
         testBuilder(
@@ -182,7 +182,7 @@ void testCommandMessages() {
 
 	// Test 5: KICK with trailing
     {
-        std::string result = MessageBuilder::buildCommand(
+        std::string result = MessageBuilder::buildCommandMessage(
             "alice!user@host", "KICK", {"#channel", "bob"}, "Bad behavior"
         );
         testBuilder(
@@ -195,7 +195,7 @@ void testCommandMessages() {
     // Test 6: QUIT with trailing (empty params)
     {
         std::vector<std::string> emptyParams;
-        std::string result = MessageBuilder::buildCommand(
+        std::string result = MessageBuilder::buildCommandMessage(
             "alice!user@host", "QUIT", emptyParams, "Leaving IRC"
         );
         testBuilder(

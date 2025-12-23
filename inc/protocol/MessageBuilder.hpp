@@ -1,5 +1,5 @@
-#ifndef MESSAGE_HPP
-#define MESSAGE_HPP
+#ifndef MESSAGEBUILDER_HPP
+#define MESSAGEBUILDER_HPP
 
 #include <string>
 #include <vector>
@@ -83,6 +83,11 @@ class MessageBuilder {
 			static void validateLength(const std::string& message);
 
 	public:
+			MessageBuilder() = delete;
+			~MessageBuilder() = delete;
+			MessageBuilder(const MessageBuilder&) = delete;
+			MessageBuilder& operator=(const MessageBuilder&) = delete;
+	
 			/**
 			 * @brief Build numeric reply message (001,002,003...)
 			 * @param server Server name sending the reply
@@ -107,7 +112,7 @@ class MessageBuilder {
 			 * @param message Error message text
 			 * @return Formatted message: ":<server> <code> <target> <param> :<message>\r\n"
 			 */
-			static std::string buildError(
+			static std::string buildErrorReply(
 				const std::string& server,
 				int code,
 				const std::string& target,
@@ -123,7 +128,7 @@ class MessageBuilder {
 			 * @param trailing Optional trailing parameter (can contain spaces)
 			 * @return Formatted message: ":<prefix> <command> [params] [:<trailing>]\r\n"
 			 */
-			static std::string buildCommand(
+			static std::string buildCommandMessage(
 				const std::string& prefix,
 				const std::string& command,
 				const std::vector<std::string>& params,
