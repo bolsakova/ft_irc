@@ -398,6 +398,14 @@ void CommandHandler::handlePing(Client& client, const Message& msg)
 }
 
 /**
+ * 
+ */
+void CommandHandler::handleQuit(Client& client, const Message& msg)
+{
+	
+}
+
+/**
  * @brief Main command dispatcher - routes commands to appropriate handlers.
  * 
  * @param raw_command Complete IRC command with \r\n

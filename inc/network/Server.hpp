@@ -38,12 +38,15 @@ class Server
 	// обработка событий
 	void acceptClient();
 	void receiveData(int fd);
-	void disconnectClient(int fd);
 	void sendData(int fd);
 	void enablePolloutForFD(int fd);
 	void disablePolloutForFd(int fd);
-
+	
 	public:
+	// TANJA: moved from private to public for using it in Command Handler
+	void disconnectClient(int fd);
+	// TANJA: new method for Command Handler
+	const std::map<int, std::unique_ptr<Client>>& getClients() const;
 	// Deleted OCF methods (canonical but disabled)
 	Server() = delete;
 	Server(const Server& other) = delete;

@@ -28,6 +28,8 @@ class CommandHandler {
 			void handleNick(Client& client, const Message& msg);	// NICK
 			void handleUser(Client& client, const Message& msg);	// USER
 			void handlePing(Client& client, const Message& msg);	// PING
+			void handleQuit(Client& client, const Message& msg);	// QUIT
+			void handlePrivmsg(Client& client, const Message& msg);	// PRIVMSG
 
 			bool isNicknameInUse(const std::string& nickname, int exclude_fd = -1);	// Check if nickname is already taken by another client
 			bool isValidNickname(const std::string& nickname);						// Validate nickname according to RFC 1459
