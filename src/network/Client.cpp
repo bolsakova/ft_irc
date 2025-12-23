@@ -6,33 +6,56 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/05 17:44:59 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/16 23:39:55 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/23 15:50:39 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "../../inc/network/Client.hpp"
 
 Client::Client(int fd)
-	: m_fd(fd), m_inbuf(""), m_outbuf(""), m_peer_closed(false) // init flag
+	: m_fd(fd),
+	  m_inbuf(""),
+	  m_outbuf(""),
+	  m_nickname(""),
+	  m_username(""),
+	  m_realname(""),
+	  m_authenticated(false),
+	  m_registered(false),
+	  m_peer_closed(false),
+	  m_should_disconnect(false), // init disconnect flag as false
+	  m_quit_reason("") // no quit reason until requested
 {}
 
-Client::~Client(){}
+Client::~Client() {}
 
-int Client::getFD() const
-{
-	return m_fd;
-}
+int Client::getFD() const { return m_fd; }
 
-void Client::appendToInBuf(const std::string &data)
-{
-	m_inbuf += data;
-}
+// = Name getters/setters =
+void Client::setNickname(const std::string& nickname){m_nickname = nickname;}
 
-bool Client::hasCompleteCmd() const
-{
-	// for IRC строго конец команды это "\r\n"
-	return (m_inbuf.find("\r\n") != std::string::npos);
-}
+void Client::setUsername(const std::string& username){m_username = username;}
+
+void Client::setRealname(const std::string& realname){m_realname = realname;}
+
+const std::string& Client::getNickname() const{return m_nickname;}
+
+const std::string& Client::getUsername() const{return m_username;}
+
+const std::string& Client::getRealname() const{return m_realname;}
+
+// = Authentication and Registration state  =
+void Client::setAuthenticated(bool auth){m_authenticated = auth;}
+
+bool Client::isAuthenticated() const{return m_authenticated;}
+
+void Client::setRegistered(bool reg){m_registered = reg;}
+
+bool Client::isRegistered() const{return m_registered;}
+
+void Client::appendToInBuf(const std::string &data){m_inbuf += data;}
+
+// =  IRC строго конец команды это "\r\n" =
+bool Client::hasCompleteCmd() const{return (m_inbuf.find("\r\n") != std::string::npos);}
 
 std::string Client::extractNextCmd()
 {
@@ -46,20 +69,11 @@ std::string Client::extractNextCmd()
 	return line;
 }
 
-void Client::appendToOutBuf(const std::string &data)
-{
-	m_outbuf += data;
-}
+void Client::appendToOutBuf(const std::string &data){m_outbuf += data;}
 
-bool Client::hasDataToSend() const
-{
-	return !m_outbuf.empty();
-}
+bool Client::hasDataToSend() const{return !m_outbuf.empty();}
 
-const std::string& Client::getOutBuf() const
-{
-	return m_outbuf;
-}
+const std::string& Client::getOutBuf() const{return m_outbuf;}
 
 void Client::consumeOutBuf(std::size_t count)
 {
@@ -71,18 +85,25 @@ void Client::consumeOutBuf(std::size_t count)
 	m_outbuf.erase(0, count);
 }
 
-const std::string& Client::getInBuf() const
+const std::string& Client::getInBuf() const{return m_inbuf;}
+
+void Client::markPeerClosed(){m_peer_closed = true;}
+
+bool Client::isPeerClosed() const{return m_peer_closed;}
+
+//marks client for later disconnection by server(for QUIT cmd). Server will check shouldDisconnect() 
+//in main loop and properly disconnect the client after processing current cmd.
+
+void Client::markForDisconnect(const std::string& reason)
 {
-	return m_inbuf;
+	m_should_disconnect = true; // signal server to drop connection soon
+	m_quit_reason = reason;     // remember quit reason for notices/logs
 }
 
-// NEW
-void Client::markPeerClosed()
-{
-	m_peer_closed = true;
-}
+// Check if client should be disconnected, true if client should be disconnected, false otherwise
+bool Client::shouldDisconnect() const{return m_should_disconnect;}
+		
+//Get disconnection reason (for logging/notifications), return Quit reason string
+const std::string& Client::getQuitReason() const{return m_quit_reason;}
 
-bool Client::isPeerClosed() const
-{
-	return m_peer_closed;
-}
+

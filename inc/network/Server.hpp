@@ -19,6 +19,9 @@
 #include <map>
 #include <sys/poll.h>
 #include "Client.hpp"
+#include "Channel.hpp"
+
+class CommandHandler;
 
 /**
  * Класс Server — объект, который должен быть: только один, не копируемый, не перемещаемый. Значит:
@@ -33,6 +36,8 @@ class Server
 	std::string m_password;
 	std::vector<pollfd> m_poll_fds; // все дескрипторы, которые отслеживает poll()
 	std::map<int, std::unique_ptr<Client>> m_clients; // переход на std::unique_ptr<Client>  к безопасному и современному C++17.
+	std::map<std::string, std::unique_ptr<Channel>> m_channels; // Каналы по имени, владеем их объектами
+	std::unique_ptr<CommandHandler> m_cmd_handler;
 
 	void initSocket(const std::string &port);
 	// обработка событий
@@ -52,6 +57,11 @@ class Server
 	Server(const std::string &port, const std::string &password);
 	~Server();
 	void run();
+	const std::map<int, std::unique_ptr<Client>>& getClients() const;
+	Channel* findChannel(const std::string& name);
+	Channel* createChannel(const std::string& name);
+	void removeChannel(const std::string& name);
+	const std::map<std::string, std::unique_ptr<Channel>>& getChannels() const;
 
 };
 
