@@ -1,4 +1,4 @@
-#include "../../inc/protocol/Message.hpp"
+#include "../../inc/protocol/MessageBuilder.hpp"
 
 /**
  * @brief Check if the message has a prefix
@@ -124,7 +124,7 @@ std::string MessageBuilder::buildNumericReply(const std::string& server, int cod
  * - ERR_NICKNAMEINUSE (433) - nickname is already taken
  * - ERR_NEEDMOREPARAMS (461) - command requires more parameters
  */
-std::string MessageBuilder::buildError(const std::string& server, int code, const std::string& target, const std::string& param, const std::string& message) {
+std::string MessageBuilder::buildErrorReply(const std::string& server, int code, const std::string& target, const std::string& param, const std::string& message) {
 	std::string result;
 
 	// Start with prefix (server name)
@@ -176,7 +176,7 @@ std::string MessageBuilder::buildError(const std::string& server, int code, cons
  * Used when server relays messages between clients or sends
  * notifications about channel/user events
  */
-std::string MessageBuilder::buildCommand(const std::string& prefix, const std::string& command, const std::vector<std::string>& params, const std::string& trailing) {
+std::string MessageBuilder::buildCommandMessage(const std::string& prefix, const std::string& command, const std::vector<std::string>& params, const std::string& trailing) {
 	std::string result;
 
 	// Start with prefix (source of the message)

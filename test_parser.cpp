@@ -1,5 +1,5 @@
 #include "inc/protocol/Parser.hpp"
-#include "inc/protocol/Message.hpp"
+#include "inc/protocol/MessageBuilder.hpp"
 
 void testParse(const std::string& raw) {
 	std::cout << "\n--- Testing: " << raw;

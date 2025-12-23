@@ -38,11 +38,11 @@ class Server
 	// обработка событий
 	void acceptClient();
 	void receiveData(int fd);
-	void disconnectClient(int fd);
 	void sendData(int fd);
 	void enablePolloutForFD(int fd);
 	void disablePolloutForFd(int fd);
-
+	void disconnectClient(int fd);
+	
 	public:
 	// Deleted OCF methods (canonical but disabled)
 	Server() = delete;
