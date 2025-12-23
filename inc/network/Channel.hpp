@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/23 15:57:49 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/23 16:28:43 by aokhapki         ###   ########.fr       */
+/*   Updated: 2025/12/23 16:37:52 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -43,10 +43,8 @@ public:
 
     // === Metadata ===
     void setTopic(const std::string& topic);
-    void setKey(const std::string& key);
     const std::string& getName() const;
     const std::string& getTopic() const;
-    const std::string& getKey() const;
 
     // === Membership ===
     void addMember(Client* client);
@@ -54,6 +52,23 @@ public:
     bool isMember(int fd) const;
     const std::map<int, Client*>& getMembers() const;
     bool isEmpty() const;
+
+    // === Operators ===
+    void addOperator(int fd);
+    void removeOperator(int fd);
+    bool isOperator(int fd) const;
+
+    // === Modes ===
+    void setUserLimit(int limit);
+    void setInviteOnly(bool enable);
+    void setTopicProtected(bool enable);
+    void setKey(const std::string& key);
+    int getUserLimit() const;
+    const std::string& getKey() const;
+    void removeKey();
+    bool hasKey() const;
+    bool isInviteOnly() const;
+    bool isTopicProtected() const;
 };
 
 #endif // CHANNEL_HPP
