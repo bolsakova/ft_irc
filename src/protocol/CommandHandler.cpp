@@ -455,6 +455,169 @@ void CommandHandler::handleQuit(Client& client, const Message& msg)
 }
 
 /**
+ * @brief Handle PRIVMSG command - send private message to user or channel.
+ * Format: PRIVMSG <target> :<message>
+ * 
+ * @param client Client sending the command
+ * @param msg Parsed message with command and parameters
+ * 
+ * Algorithm:
+ * 			1. Check if client is registered -> error 451
+ * 			2. Check if target parameter exists -> error 411
+ * 			3. Check if message text exists -> 412
+ * 			4. Determine target type:
+ * 				- If starts with # -> channel
+ * 				- Otherwise -> user nickname
+ * 			5. For channel:
+ * 				- Check channel exists -> error 403
+ * 				- Check sender is member -> error 404
+ * 				- Broadcast to all members except sender
+ * 			6. For user:
+ * 				- Find target user by nickname -> error 401
+ * 				- Send message to target
+ */
+void CommandHandler::handlePrivmsg(Client& client, const Message& msg)
+{
+	// Check if client registered
+	if (!client.isRegistered()) {
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOTREGISTERED,
+			client.getNickname().empty() ? "*" : client.getNickname(),
+			"",
+			"You have not registered"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Check if target parameter was provided
+	if (msg.params.empty())
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NORECIPIENT,
+			client.getNickname(),
+			"",
+			"No recipient given (PRIVMSG)"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Check if message text was provided
+	if (msg.trailing.empty())
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOTEXTTOSEND,
+			client.getNickname(),
+			"",
+			"No text to send"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	std::string target = msg.params[0];
+	std::string message = msg.trailing;
+
+	// Check if target is a channel (starts with #)
+	if (!target.empty() && target[0] == '#')
+	{
+		// Find channel
+		Channel* chan = m_server.findChannel(target);
+
+		if (!chan)
+		{
+			// Channel doesn't exist
+			std::string error = MessageBuilder::buildErrorReply(
+				m_server_name, ERR_NOSUCHCHANNEL,
+				client.getNickname(),
+				target,
+				"No such channel"
+			);
+			sendReply(client, error);
+			return;
+		}
+
+		// Check if sender is a member of the channel
+		if (!chan->isMember(client.getFD()))
+		{
+			std::string error = MessageBuilder::buildErrorReply(
+				m_server_name, ERR_CANNOTSENDTOCHAN,
+				client.getNickname(),
+				target,
+				"Cannot send to channel"
+			);
+			sendReply(client, error);
+			return;
+		}
+
+		// Build PRIVMSG for channel
+		// Format: :sender!user@host PRIVMSG #channel :message
+		std::string prefix = client.getNickname() + "!" +
+							client.getUsername() + "@localhost";
+		std::vector<std::string> params;
+		params.push_back(target);
+
+		std::string privmsg = MessageBuilder::buildCommandMessage(
+			prefix, "PRIVMSG", params, message
+		);
+
+		// Broadcast to all channel memers except sender
+		chan->broadcast(privmsg, client.getFD());
+
+		std::cout << "PRIVMSG from " << client.getNickname()
+					<< " to channel " << target << ": " << message << "\n";
+	} 
+	else
+	{
+		// Target is a user nickname - find the user
+		const std::map<int, std::unique_ptr<Client>>& clients = m_server.getClients();
+		Client* target_client = nullptr;
+
+		for (std::map<int, std::unique_ptr<Client>>::const_iterator it = clients.begin();
+			it != clients.end(); ++it)
+		{
+			if (it->second->getNickname() == target)
+			{
+				target_client = it->second.get();
+				break;
+			}
+		}
+
+		// Check if target user exists
+		if (!target_client)
+		{
+			std::string error = MessageBuilder::buildErrorReply(
+				m_server_name, ERR_NOSUCHNICK,
+				client.getNickname(),
+				target,
+				"No such nick/channel"
+			);
+			sendReply(client, error);
+			return;
+		}
+
+		// Build PRIVMSG with sender prefix
+		// Format: :sender!user@host PRIVMSG target :message
+		std::string prefix = client.getNickname() + "!" +
+							client.getUsername() + "@localhost";
+		
+		std::vector<std::string> params;
+		params.push_back(target);
+
+		std::string privmsg = MessageBuilder::buildCommandMessage(
+			prefix, "PRIVMSG", params, message
+		);
+
+		// Send to target user
+		sendReply(*target_client, privmsg);
+
+		std::cout << "PRIVMSG from " << client.getNickname()
+					<< " to " << target << ": " << message << "\n";
+	}
+}
+
+/**
  * @brief Main command dispatcher - routes commands to appropriate handlers.
  * 
  * @param raw_command Complete IRC command with \r\n
@@ -486,6 +649,10 @@ void CommandHandler::handleCommand(const std::string& raw_command, Client& clien
 			handleUser(client, msg);
 		else if (msg.command == "PING")
 			handlePing(client, msg);
+		else if (msg.command == "QUIT")
+			handleQuit(client, msg);
+		else if (msg.command == "PRIVMSG")
+			handlePrivmsg(client, msg);
 		else {
 			// Command not recognized or not implemented
 			std::string error = MessageBuilder::buildErrorReply(
