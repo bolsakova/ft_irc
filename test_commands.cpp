@@ -175,7 +175,7 @@ void testPrivmsgCommand(Server& server, CommandHandler& handler) {
 	printTestResult("ERR_NOTREGISTERED", hasError);
 
 	// Test 2: PRIVMSG without recipient
-	std::cout << "\nTest 1: PRIVMSG without recipient\n";
+	std::cout << "\nTest 2: PRIVMSG without recipient\n";
 	Client sender(105);
 	sender.setAuthenticated(true);
 	sender.setNickname("tanja");
@@ -254,6 +254,168 @@ void testPrivmsgCommand(Server& server, CommandHandler& handler) {
 	printTestResult("Sender didn't receive own message", senderEmpty);
 }
 
+void testJoinCommand(Server& server, CommandHandler& handler) {
+	std::cout << "\n=== Testing JOIN Command ===\n";
+
+	// Test 1: JOIN without registration
+	std::cout << "\nTest 1: JOIN without registration\n";
+	Client unregistered(300);
+	unregistered.setRegistered(false);
+
+	handler.handleCommand("JOIN #test\r\n", unregistered);
+	std::string response = unregistered.getOutBuf();
+
+	bool hasError = (response.find("451") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NOTREGISTERED", hasError);
+
+	// Test 2: JOIN without channel parameter
+	std::cout << "\nTest 2: JOIN without channel parameter\n";
+	Client registered(301);
+	registered.setAuthenticated(true);
+	registered.setNickname("alice");
+	registered.setUsername("alice");
+	registered.setRegistered(true);
+
+	handler.handleCommand("JOIN\r\n", registered);
+	response = registered.getOutBuf();
+
+	hasError = (response.find("461") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NEEDMOREPARAMS", hasError);
+
+	// Test 3: JOIN with invalid channel name
+	std::cout << "\nTest 3: JOIN with invalid channel name\n";
+	registered.consumeOutBuf(registered.getOutBuf().size());
+
+	handler.handleCommand("JOIN invalidname\r\n", registered);
+	response = registered.getOutBuf();
+
+	hasError = (response.find("403") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NOSUCHCHANNEL", hasError);
+
+	// Test 4: JOIN create new channel (becomes operator)
+	std::cout << "\nTest 4: JOIN create new channel (becomes operator)\n";
+	Client creator(302);
+	creator.setAuthenticated(true);
+	creator.setNickname("creator");
+	creator.setUsername("creator");
+	creator.setRegistered(true);
+
+	handler.handleCommand("JOIN #newchan\r\n", creator);
+	response = creator.getOutBuf();
+
+	bool hasJoin = (response.find("JOIN") != std::string::npos);
+	bool hasNames = (response.find("353") != std::string::npos);			// RPL_NAMREPLY
+	bool hasEndNames = (response.find("366") != std::string::npos);			// RPL_ENDOFNAMES
+	bool hasOperator = (response.find("@creator") != std::string::npos);	// @ prefix
+
+	std::cout << "  Has JOIN: " << (hasJoin ? "yes" : "no") << "\n";
+	std::cout << "  Has NAMES: " << (hasNames ? "yes" : "no") << "\n";
+	std::cout << "  Is operator: " << (hasOperator ? "yes" : "no") << "\n";
+
+	printTestResult("Create channel as operator", hasJoin && hasNames && hasEndNames && hasOperator);
+
+	// Test 5: JOIN existing channel (not operator)
+	std::cout << "\nTest 5: JOIN existing channel\n";
+	Client joiner(303);
+	joiner.setAuthenticated(true);
+	joiner.setNickname("joiner");
+	joiner.setUsername("joiner");
+	joiner.setRegistered(true);
+
+	handler.handleCommand("JOIN #newchan\r\n", joiner);
+	response = joiner.getOutBuf();
+
+	hasJoin = (response.find("JOIN") != std::string::npos);
+	bool notOperator = (response.find("@joiner") != std::string::npos);	// No @ prefix
+	bool hasBothUsers = (response.find("creator") != std::string::npos &&
+						response.find("joiner") != std::string::npos);
+
+	std::cout << "  Has JOIN: " << (hasJoin ? "yes" : "no") << "\n";
+	std::cout << "  Not operator: " << (notOperator ? "yes" : "no") << "\n";
+	std::cout << "  Both users in list: " << (hasBothUsers ? "yes" : "no") << "\n";
+
+	printTestResult("Join existing channel", hasJoin && notOperator && hasBothUsers);
+
+	// Test 6: JOIN with invite-only mode (+i)
+	std::cout << "\nTest 6: JOIN invite-only channel without invite\n";
+
+	// Create invite-only channel
+	Channel* inviteChan = server.createChannel("#invite");
+	inviteChan->setInviteOnly(true);
+
+	Client noInvite(304);
+	noInvite.setAuthenticated(true);
+	noInvite.setNickname("noinvite");
+	noInvite.setUsername("noinvite");
+	noInvite.setRegistered(true);
+
+	handler.handleCommand("JOIN #invite\r\n", noInvite);
+	response = noInvite.getOutBuf();
+
+	hasError = (response.find("473") != std::string::npos);	// ERR_INVITEONLYCHAN
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_INVITEONLYCHAN", hasError);
+
+	// Test 7: JOIN with key mode (+k) - wrong key
+	std::cout << "\nTest 7: JOIN channel with key - wrong key\n";
+
+	Channel* keyChan = server.createChannel("#secret");
+	keyChan->setKey("correctkey");
+
+	Client wrongKey(305);
+	wrongKey.setAuthenticated(true);
+	wrongKey.setNickname("wrongKey");
+	wrongKey.setUsername("wrongKey");
+	wrongKey.setRegistered(true);
+
+	handler.handleCommand("JOIN #secret wrongkey\r\n", wrongKey);
+	response = wrongKey.getOutBuf();
+
+	hasError = (response.find("475") != std::string::npos);	// ERR_BADCHANNELKEY
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_BADCHANNELKEY", hasError);
+
+	// Test 8: JOIN with correct key
+	std::cout << "\nTest 8: JOIN with correct key\n";
+	wrongKey.consumeOutBuf(wrongKey.getOutBuf().size());
+
+	handler.handleCommand("JOIN #secret correctkey\r\n", wrongKey);
+	response = wrongKey.getOutBuf();
+
+	hasJoin = (response.find("JOIN") != std::string::npos);
+	std::cout << "  Has JOIN: " << (hasJoin ? "yes" : "no") << "\n";
+	printTestResult("JOIN with correct key", hasJoin);
+
+	// Test 9: JOIN with user limit (+l) - channel full
+	std::cout << "\nTest 9: JOIN channel with user limit (full)\n";
+
+	Channel* limitChan = server.createChannel("#limited");
+	limitChan->setUserLimit(1);
+
+	Client first(306);
+	first.setAuthenticated(true);
+	first.setNickname("first");
+	first.setUsername("first");
+	first.setRegistered(true);
+	limitChan->addMember(&first);
+
+	Client second(307);
+	second.setAuthenticated(true);
+	second.setNickname("second");
+	second.setUsername("second");
+	second.setRegistered(true);
+
+	handler.handleCommand("JOIN #limited\r\n", second);
+	response = second.getOutBuf();
+
+	hasError = (response.find("471") != std::string::npos);	// ERR_CHANNELISFULL
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_CHANNELISFULL", hasError);
+}
+
 /**
  * @brief Test Registration Flow (PASS -> NICK -> USER)
  */
@@ -311,6 +473,7 @@ int main() {
 		testPingCommand(server, handler);
 		testQuitCommand(server, handler);
 		testPrivmsgCommand(server, handler);
+		testJoinCommand(server, handler);
 		
 		std::cout << "\n======================================\n";
 		std::cout << "          All Tests Completed!         \n";
