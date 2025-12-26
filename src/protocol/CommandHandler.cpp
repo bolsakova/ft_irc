@@ -848,6 +848,108 @@ void CommandHandler::handleJoin(Client& client, const Message& msg) {
 }
 
 /**
+ * @brief Handle PART command - client leaves a channel
+ * Syntax: PART <channel> [<reason>]
+ * 
+ * @param client Client sending the command
+ * @param msg Parsed message with command and parameters
+ * 
+ * Algorithm:
+ * 		1. Check if client is registered
+ * 		2. Verify channel parameter is provided
+ * 		3. Validate channel exists
+ * 		4. Check if client is a member of the channel
+ * 		5. Remove client from channel
+ * 		6. Broadcast PART message to all channel members (including sender)
+ * 		7. Optionally include reason for leaving
+ * 
+ * Responses:
+ * 		- ERR_NEEDMOREPARAMS (461): No channel specified
+ * 		- ERR_NOSUCHCHANNEL (403): Channel doesn't exist
+ * 		- ERR_NOTONCHANNEL (442): Client is not on that channel
+ * 		- Success: :nick!user@host PART #channel [:reason]
+ */
+void CommandHandler::handlePart(Client& client, const Message& msg) {
+	// Check if client is registered
+	if (!client.isRegistered())
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOTREGISTERED,
+			"*", "",
+			"You have not registered"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Check if channel parameter is provided
+	if (msg.params.empty())
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NEEDMOREPARAMS,
+			client.getNickname(),
+			"PART",
+			"Not enough parameters"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	std::string channel_name = msg.params[0];
+	std::string reason = msg.trailing;
+
+	// Find channel
+	Channel* chan = m_server.findChannel(channel_name);
+
+	if (!chan)
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOSUCHCHANNEL,
+			client.getNickname(),
+			channel_name,
+			"No such channel"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Check if client is a member of the channel
+	if (!chan->isMember(client.getFD()))
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOTONCHANNEL,
+			client.getNickname(),
+			channel_name,
+			"You're not on that channel"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Build PART message
+	// Format: :nick!user@host PART #channel [:reason]
+	std::string prefix = client.getNickname() + "!" +
+						client.getUsername() + "@localhost";
+	std::vector<std::string> params;
+	params.push_back(channel_name);
+	
+	std::string part_msg = MessageBuilder::buildCommandMessage(
+		prefix, "PART", params, reason
+	);
+
+	// Broadcast PART to all channel members (including sender)
+	chan->broadcast(part_msg);
+
+	std::cout << client.getNickname() << " left " << channel_name;
+	if (!reason.empty())
+		std::cout << " (" << reason << ")";
+	std::cout << "\n";
+
+	// Remove client from channel
+	chan->removeMember(client.getFD());
+}
+
+/**
  * @brief Main command dispatcher - routes commands to appropriate handlers.
  * 
  * @param raw_command Complete IRC command with \r\n
@@ -885,6 +987,8 @@ void CommandHandler::handleCommand(const std::string& raw_command, Client& clien
 			handlePrivmsg(client, msg);
 		else if (msg.command == "JOIN")
 			handleJoin(client, msg);
+		else if (msg.command == "PART")
+			handlePart(client, msg);
 		else {
 			// Command not recognized or not implemented
 			std::string error = MessageBuilder::buildErrorReply(
