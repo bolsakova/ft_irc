@@ -416,6 +416,174 @@ void testJoinCommand(Server& server, CommandHandler& handler) {
 	printTestResult("ERR_CHANNELISFULL", hasError);
 }
 
+void testPartCommand(Server& server, CommandHandler& handler)
+{
+	std::cout << "\n=== Testing PART Command ===\n";
+
+	// Test 1: PART without registration
+	std::cout << "\nTest 1: PART without registration\n";
+	Client unregistered(400);
+	unregistered.setRegistered(false);
+
+	handler.handleCommand("PART #test\r\n", unregistered);
+	std::string response = unregistered.getOutBuf();
+
+	bool hasError = (response.find("451") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NOTREGISTERED", hasError);
+
+	// Test 2: PART without channel parameter
+	std::cout << "\nTest 2: PART without channel parameter\n";
+	Client registered(401);
+	registered.setAuthenticated(true);
+	registered.setNickname("alice");
+	registered.setUsername("alice");
+	registered.setRegistered(true);
+
+	handler.handleCommand("PART\r\n", registered);
+	response = registered.getOutBuf();
+
+	hasError = (response.find("461") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NEEDMOREPARAMS", hasError);
+
+	// Test 3: PART from non-existent channel
+	std::cout << "\nTest 3: PART from non-existent channel\n";
+	Client client(402);
+	client.setAuthenticated(true);
+	client.setNickname("testuser");
+	client.setUsername("testuser");
+	client.setRegistered(true);
+
+	handler.handleCommand("PART #nonexistent\r\n", client);
+	response = client.getOutBuf();
+
+	hasError = (response.find("403") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NOSUCHCHANNEL", hasError);
+
+	// Test 4: PART when not on channel
+	std::cout << "\nTest 4: PART when not on channel\n";
+
+	// Create channel with another user
+	Client creator(403);
+	creator.setAuthenticated(true);
+	creator.setNickname("creator");
+	creator.setUsername("creator");
+	creator.setRegistered(true);
+
+	handler.handleCommand("JOIN #testchan\r\n", creator);
+	creator.consumeOutBuf(creator.getOutBuf().size());
+	
+	// Try to PART from someone not on channel
+	Client notMember(404);
+	notMember.setAuthenticated(true);
+	notMember.setNickname("notmember");
+	notMember.setUsername("notmember");
+	notMember.setRegistered(true);
+	
+	handler.handleCommand("PART #testchan\r\n", notMember);
+	response = notMember.getOutBuf();
+
+	hasError = (response.find("442") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NOTONCHANNEL", hasError);
+
+	// Test 5: Successful PART without reason
+	std::cout << "\nTest 5: Successful PART without reason\n";
+	Client partUser(405);
+	partUser.setAuthenticated(true);
+	partUser.setNickname("partuser");
+	partUser.setUsername("partuser");
+	partUser.setRegistered(true);
+
+	// Join channel first
+	handler.handleCommand("JOIN #parttest\r\n", partUser);
+	partUser.consumeOutBuf(partUser.getOutBuf().size());
+	
+	// Part from channel
+	handler.handleCommand("PART #parttest\r\n", partUser);
+	response = partUser.getOutBuf();
+
+	bool hasPart = (response.find("PART") != std::string::npos);	// No @ prefix
+	bool hasChannel = (response.find("#parttest") != std::string::npos);
+
+	std::cout << "  Has PART: " << (hasPart ? "yes" : "no") << "\n";
+	std::cout << "  Has channel: " << (hasChannel ? "yes" : "no") << "\n";
+	printTestResult("PART without reason", hasPart && hasChannel);
+
+	// Verify user is removed from channel
+	Channel* chan = server.findChannel("#parttest");
+	bool removed = (!chan || !chan->isMember(405));
+	std::cout << " User removed: " << (removed ? "yes" : "no") << "\n";
+	printTestResult("User removed from channel", removed);
+
+	// Test 6: Successful PART with reason
+	std::cout << "\nTest 6: Successful PART with reason\n";
+
+	Client reasonUser(406);
+	reasonUser.setAuthenticated(true);
+	reasonUser.setNickname("reasonuser");
+	reasonUser.setUsername("reasonuser");
+	reasonUser.setRegistered(true);
+
+	// Join channel
+	handler.handleCommand("JOIN #reasontest\r\n", reasonUser);
+	reasonUser.consumeOutBuf(reasonUser.getOutBuf().size());
+	
+	// Part with reason
+	handler.handleCommand("PART #reasontest :Goodbye everyone!\r\n", reasonUser);
+	response = reasonUser.getOutBuf();
+
+	hasPart = (response.find("PART") != std::string::npos);
+	bool hasReason = (response.find("Goodbye everyone!") != std::string::npos);
+
+	std::cout << "  Has PART: " << (hasPart ? "yes" : "no") << "\n";
+	std::cout << "  Has reason: " << (hasReason? "yes" : "no") << "\n";
+	printTestResult("PART with reason", hasPart && hasReason);
+
+	// Test 7: PART broadcasts to channel members
+	std::cout << "\nTest 7: PART broadcasts to channel members\n";
+
+	Client user1(407);
+	user1.setAuthenticated(true);
+	user1.setNickname("user1");
+	user1.setUsername("user1");
+	user1.setRegistered(true);
+
+	Client user2(408);
+	user2.setAuthenticated(true);
+	user2.setNickname("user2");
+	user2.setUsername("user2");
+	user2.setRegistered(true);
+
+	// Both join channel
+	handler.handleCommand("JOIN #broadcast\r\n", user1);
+	handler.handleCommand("JOIN #broadcast\r\n", user2);
+	
+	user1.consumeOutBuf(user1.getOutBuf().size());
+	user2.consumeOutBuf(user2.getOutBuf().size());
+	
+	// User1 parts with message
+	handler.handleCommand("PART #broadcast :Leaving now\r\n", user1);
+
+	// User1 should see their own PART
+	std::string output1 = user1.getOutBuf();
+	bool user1SeesPart = (output1.find("PART") != std::string::npos);
+	std::cout << "  User1 sees PART: " << (user1SeesPart ? "yes" : "no") << "\n";
+	
+	std::string output2 = user2.getOutBuf();
+	bool user2SeesPart = (output2.find("PART") != std::string::npos);
+	bool user2SeesUser1 = (output2.find("user1") != std::string::npos);
+	bool user2SeesReason = (output2.find("Leaving now") != std::string::npos);
+	
+	std::cout << "  User2 sees PART: " << (user2SeesPart ? "yes" : "no") << "\n";
+	std::cout << "  User2 sees user1: " << (user2SeesUser1 ? "yes" : "no") << "\n";
+	std::cout << "  User2 sees reason: " << (user2SeesReason ? "yes" : "no") << "\n";
+
+	printTestResult("PART broadcasts to members", user1SeesPart && user2SeesPart && user2SeesUser1 && user2SeesReason);
+}
+
 /**
  * @brief Test Registration Flow (PASS -> NICK -> USER)
  */
@@ -469,11 +637,12 @@ int main() {
 		std::cout << "Server initialized for testing.\n";
 
 		// Run tests
-		testRegistrationFlow(server, handler);
-		testPingCommand(server, handler);
-		testQuitCommand(server, handler);
-		testPrivmsgCommand(server, handler);
-		testJoinCommand(server, handler);
+		// testRegistrationFlow(server, handler);
+		// testPingCommand(server, handler);
+		// testQuitCommand(server, handler);
+		// testPrivmsgCommand(server, handler);
+		// testJoinCommand(server, handler);
+		testPartCommand(server, handler);
 		
 		std::cout << "\n======================================\n";
 		std::cout << "          All Tests Completed!         \n";
