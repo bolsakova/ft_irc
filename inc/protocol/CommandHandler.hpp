@@ -30,9 +30,11 @@ class CommandHandler {
 			void handlePing(Client& client, const Message& msg);	// PING
 			void handleQuit(Client& client, const Message& msg);	// QUIT
 			void handlePrivmsg(Client& client, const Message& msg);	// PRIVMSG
+			void handleJoin(Client& client, const Message& msg);	// JOIN
 
 			bool isNicknameInUse(const std::string& nickname, int exclude_fd = -1);	// Check if nickname is already taken by another client
 			bool isValidNickname(const std::string& nickname);						// Validate nickname according to RFC 1459
+			bool isValidChannelName(const std::string& name);						// Validate channel name
 
 			void sendWelcome(Client& client);							// Send welcome messages (001-004) to newly registered client
 			void sendReply(Client& client, const std::string& reply);	// Append reply to client's output buffer

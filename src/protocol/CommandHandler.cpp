@@ -115,6 +115,42 @@ bool CommandHandler::isNicknameInUse(const std::string& nickname, int exclude_fd
 }
 
 /**
+ * @brief Validate channel name according to IRC rules
+ * 
+ * @param name Channel name to validate
+ * @return True if valid, false otherwise
+ * 
+ * IRC channel name rules:
+ * 		- Starts with # or &
+ * 		- Length: 1-50 characters (including #)
+ * 		- Cannot contain: space, comma, control-G (bell)
+ */
+bool CommandHandler::isValidChannelName(const std::string& name) {
+	// Check minimum length (at least # + 1 char)
+	if (name.length() < 2)
+		return false;
+
+	// Check maximum length
+	if (name.length() > 50)
+		return false;
+	
+	// Must start with # or &
+	if (name[0] != '#' && name[0] != '&')
+		return false;
+	
+	// Check for forbidden characters
+	for (size_t i = 0; i < name.length(); ++i)
+	{
+		char c = name[i];
+		// Space, comma, or control-G (bell, ASCII 7)
+		if (c == ' ' || c == ',' || c == '\a' || c == '\0')
+			return false;
+	}
+	
+	return true;
+}
+
+/**
  * @brief Send welcome messages (RPL_WELCOME through RPL_MYINFO) to client.
  * Called after successful registration (PASS + NICK + USER complete)
  * 
@@ -618,6 +654,200 @@ void CommandHandler::handlePrivmsg(Client& client, const Message& msg)
 }
 
 /**
+ * @brief Handle JOIN command - join or create a channel
+ * Format: JOIN <channel> [key]
+ * 
+ * @param client Client sending the command
+ * @param msg Parsed message with command and parameters
+ * 
+ * Algorithm:
+ * 			1. Check if client is registered -> error 451
+ * 			2. Check if channel parameter exists -> error 461
+ * 			3. Extract channel name and optional key
+ * 			4. Validate channel name format
+ * 			5. Find or create channel:
+ * 				- If not exists: create and make client operator
+ * 				- If exists: check modes (+i, +k, +l)
+ * 			6. Add client to channel
+ * 			7. Send JOIN confirmation to client
+ * 			8. Broadcast JOIN to all channel members
+ * 			9. Send NAMES list (RPL_NAMREPLY + RPL_ENDOFNAMES)
+ * 			10. Send TOPIC if set (RPL_TOPIC or RPL_NOTOPIC)
+ */
+void CommandHandler::handleJoin(Client& client, const Message& msg) {
+	// Check if client is registered
+	if (!client.isRegistered()) {
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOTREGISTERED,
+			client.getNickname().empty() ? "*" : client.getNickname(),
+			"",
+			"You have not registered"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Check if channel parameter was provided
+	if (msg.params.empty())
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NEEDMOREPARAMS,
+			client.getNickname(),
+			"JOIN",
+			"Not enough parameters"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	std::string channel_name = msg.params[0];
+	std::string key = (msg.params.size() > 1) ? msg.params[1] : "";
+
+	// Validate channel name
+	if (!isValidChannelName(channel_name)) {
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOSUCHCHANNEL,
+			client.getNickname(),
+			channel_name,
+			"Invalid channel name"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Find or create channel
+	Channel* chan = m_server.findChannel(channel_name);
+	bool is_new_channel = (chan == nullptr);
+
+	if (is_new_channel)
+	{
+		// Create new channel
+		chan = m_server.createChannel(channel_name);
+		// First member becomes operator
+		chan->addOperator(client.getFD());
+		std::cout << "Created new channel: " << channel_name << ", operator: " << client.getNickname() << "\n";
+	}
+	else
+	{
+		// Channel exists - check modes
+		// Check +i (invite-only)
+		if (chan->isInviteOnly())
+		{
+			if (!chan->isInvited(client.getFD()))
+			{
+				std::string error = MessageBuilder::buildErrorReply(
+					m_server_name, ERR_INVITEONLYCHAN,
+					client.getNickname(),
+					channel_name,
+					"Cannot join channel (+i)"
+				);
+				sendReply(client, error);
+				return;
+			}
+			// Remove from invited list after successful join
+			chan->removeInvited(client.getFD());
+		}
+
+		// Check +k (channel key)
+		if (chan->hasKey())
+		{
+			if (key != chan->getKey())
+			{
+				std::string error = MessageBuilder::buildErrorReply(
+					m_server_name, ERR_BADCHANNELKEY,
+					client.getNickname(),
+					channel_name,
+					"Cannot join channel (+k)"
+				);
+				sendReply(client, error);
+				return;
+			}
+		}
+		
+		// Check +l (user limit)
+		int limit = chan->getUserLimit();
+		if (limit > 0 && static_cast<int>(chan->getMembers().size()) >= limit)
+		{
+			std::string error = MessageBuilder::buildErrorReply(
+				m_server_name, ERR_CHANNELISFULL,
+				client.getNickname(),
+				channel_name,
+				"Cannot join channel (+l)"
+			);
+			sendReply(client, error);
+			return;
+		}
+	}
+
+	// Add client to channel
+	chan->addMember(&client);
+
+	// Build JOIN message
+	// Format: :nick!user@host JOIN :#channel
+	std::string prefix = client.getNickname() + "!" +
+						client.getUsername() + "@localhost";
+	std::vector<std::string> empty_params;
+	std::string join_msg = MessageBuilder::buildCommandMessage(
+		prefix, "JOIN", empty_params, channel_name
+	);
+
+	// Broadcast JOIN to all members (including sender)
+	chan->broadcast(join_msg);
+
+	std::cout << client.getNickname() << " joined " << channel_name << "\n";
+
+	// Send NAMES list (RPL_NAMREPLY + RPL_ENDOFNAMES)
+	// Build list of nicknames with @ prefix for operators
+	std::string names_list;
+	const std::map<int, Client*>& members = chan->getMembers();
+
+	for (std::map<int, Client*>::const_iterator it = members.begin();
+		it != members.end(); ++it)
+	{
+		if (it != members.begin())
+			names_list += " ";
+		
+		// Add @ prefix for operators
+		if (chan->isOperator(it->first))
+			names_list += "@";
+		
+		names_list += it->second->getNickname();
+	}
+
+	// RPL_NAMREPLY (353): :server 353 nick = #channel :names
+	std::string names_reply = ":" + m_server_name + " 353 " +
+								client.getNickname() + " = " +
+								channel_name + " :" + names_list + "\r\n";
+	sendReply(client, names_reply);
+
+	// RPL_ENDOFNAMES (366): :server 366 nick #channel :End of /NAMES list
+	std::string end_names = MessageBuilder::buildNumericReply(
+		m_server_name, RPL_ENDOFNAMES, client.getNickname(),
+		channel_name + " :End of /NAMES list"
+	);
+	sendReply(client, end_names);
+
+	// Send TOPIC if set
+	if (chan->hasTopic())
+	{
+		// RPL_TOPIC (332)
+		std::string topic_reply = ":" + m_server_name + " 332 " +
+								client.getNickname() + " " +
+								channel_name + " :" + chan->getTopic() + "\r\n";
+		sendReply(client, topic_reply);
+	}
+	else
+	{
+		// RPL_NOTOPIC (331)
+		std::string no_topic = MessageBuilder::buildNumericReply(
+			m_server_name, RPL_NOTOPIC, client.getNickname(),
+			channel_name + " :No topic is set"
+		);
+		sendReply(client, no_topic);
+	}
+}
+
+/**
  * @brief Main command dispatcher - routes commands to appropriate handlers.
  * 
  * @param raw_command Complete IRC command with \r\n
@@ -653,6 +883,8 @@ void CommandHandler::handleCommand(const std::string& raw_command, Client& clien
 			handleQuit(client, msg);
 		else if (msg.command == "PRIVMSG")
 			handlePrivmsg(client, msg);
+		else if (msg.command == "JOIN")
+			handleJoin(client, msg);
 		else {
 			// Command not recognized or not implemented
 			std::string error = MessageBuilder::buildErrorReply(

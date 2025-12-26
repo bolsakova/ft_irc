@@ -10,6 +10,8 @@
 #define RPL_NOTOPIC				331
 #define RPL_TOPIC				332
 #define RPL_INVITING			341
+#define RPL_NAMREPLY			353
+#define RPL_ENDOFNAMES			366
 
 // Error replies (400-599)
 #define ERR_NOSUCHNICK			401
