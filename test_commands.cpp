@@ -329,7 +329,7 @@ void testJoinCommand(Server& server, CommandHandler& handler) {
 	response = joiner.getOutBuf();
 
 	hasJoin = (response.find("JOIN") != std::string::npos);
-	bool notOperator = (response.find("@joiner") != std::string::npos);	// No @ prefix
+	bool notOperator = (response.find("@joiner") == std::string::npos);	// No @ prefix
 	bool hasBothUsers = (response.find("creator") != std::string::npos &&
 						response.find("joiner") != std::string::npos);
 
