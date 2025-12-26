@@ -18,7 +18,7 @@ OBJDIR = obj
 NETWORK_SRCS = $(shell find src/network -name '*.cpp')
 PROTOCOL_SRCS = $(shell find src/protocol -name '*.cpp')
 
-TEST_SRCS = test_builder.cpp
+TEST_SRCS = test_commands.cpp
 
 # All sources
 SRCS = $(NETWORK_SRCS) $(PROTOCOL_SRCS) $(TEST_SRCS)
