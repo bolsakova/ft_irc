@@ -584,6 +584,256 @@ void testPartCommand(Server& server, CommandHandler& handler)
 	printTestResult("PART broadcasts to members", user1SeesPart && user2SeesPart && user2SeesUser1 && user2SeesReason);
 }
 
+void testKickCommand(Server& server, CommandHandler& handler)
+{
+	std::cout << "\n=== Testing KICK Command ===\n";
+
+	// Test 1: KICK without registration
+	std::cout << "\nTest 1: KICK without registration\n";
+	Client unregistered(500);
+	unregistered.setRegistered(false);
+
+	handler.handleCommand("KICK #test user1\r\n", unregistered);
+	std::string response = unregistered.getOutBuf();
+
+	bool hasError = (response.find("451") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NOTREGISTERED", hasError);
+
+	// Test 2: KICK without channel parameter
+	std::cout << "\nTest 2: KICK without channel parameter\n";
+	Client registered(501);
+	registered.setAuthenticated(true);
+	registered.setNickname("operator");
+	registered.setUsername("operator");
+	registered.setRegistered(true);
+
+	handler.handleCommand("KICK\r\n", registered);
+	response = registered.getOutBuf();
+
+	hasError = (response.find("461") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NEEDMOREPARAMS", hasError);
+
+	// Test 3: KICK without user parameter
+	std::cout << "\nTest 3: KICK without user parameter\n";
+	registered.consumeOutBuf(registered.getOutBuf().size());
+
+	handler.handleCommand("KICK #test\r\n", registered);
+	response = registered.getOutBuf();
+
+	hasError = (response.find("461") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NEEDMOREPARAMS", hasError);
+
+	// Test 4: KICK from non-existent channel
+	std::cout << "\nTest 4: KICK from non-existent channel\n";
+	registered.consumeOutBuf(registered.getOutBuf().size());
+
+	handler.handleCommand("PART #nonexistent user1\r\n", registered);
+	response = registered.getOutBuf();
+
+	hasError = (response.find("403") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NOSUCHCHANNEL", hasError);
+
+	// Test 5: KICK when not on channel
+	std::cout << "\nTest 5: KICK when not on channel\n";
+
+	// Create channel with another user
+	Client chanOp(502);
+	chanOp.setAuthenticated(true);
+	chanOp.setNickname("chanop");
+	chanOp.setUsername("chanop");
+	chanOp.setRegistered(true);
+
+	handler.handleCommand("JOIN #kicktest\r\n", chanOp);
+	chanOp.consumeOutBuf(chanOp.getOutBuf().size());
+	
+	// Try to KICK from someone not on channel
+	Client outsider(503);
+	outsider.setAuthenticated(true);
+	outsider.setNickname("outsider");
+	outsider.setUsername("outsider");
+	outsider.setRegistered(true);
+	
+	handler.handleCommand("KICK #kicktest chanop\r\n", outsider);
+	response = outsider.getOutBuf();
+
+	hasError = (response.find("442") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NOTONCHANNEL", hasError);
+
+	// Test 6: KICK when not operator
+	std::cout << "\nTest 6: KICK when not operator\n";
+
+	// Join another user to channel (not operator)
+	Client normalUser(504);
+	normalUser.setAuthenticated(true);
+	normalUser.setNickname("normaluser");
+	normalUser.setUsername("normaluser");
+	normalUser.setRegistered(true);
+
+	handler.handleCommand("JOIN #kicktest\r\n", normalUser);
+	normalUser.consumeOutBuf(normalUser.getOutBuf().size());
+	
+	// Normal user tries to kick operator
+	handler.handleCommand("KICK #kicktest chanop\r\n", normalUser);
+	response = normalUser.getOutBuf();
+
+	hasError = (response.find("482") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_CHANOPRIVSNEEDED", hasError);
+
+	// Test 7: KICK user not on channel
+	std::cout << "\nTest 7: KICK user not on channel\n";
+	chanOp.consumeOutBuf(chanOp.getOutBuf().size());
+
+	handler.handleCommand("KICK #kicktest nonexistentuser\r\n", chanOp);
+	response = chanOp.getOutBuf();
+
+	hasError = (response.find("441") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_USERNOTINCHANNEL", hasError);
+
+	// Test 8: Successful KICK without reason
+	std::cout << "\nTest 8: Successful KICK without reason\n";
+
+	Client kickOp(505);
+	kickOp.setAuthenticated(true);
+	kickOp.setNickname("kickop");
+	kickOp.setUsername("kickop");
+	kickOp.setRegistered(true);
+
+	Client victim(506);
+	victim.setAuthenticated(true);
+	victim.setNickname("victim");
+	victim.setUsername("victim");
+	victim.setRegistered(true);
+
+	handler.handleCommand("JOIN #testkick\r\n", kickOp);
+	handler.handleCommand("JOIN #testkick\r\n", victim);
+	
+	kickOp.consumeOutBuf(kickOp.getOutBuf().size());
+	victim.consumeOutBuf(victim.getOutBuf().size());
+	
+	// Operator kicks victim
+	handler.handleCommand("KICK #testkick victim\r\n", kickOp);
+
+	std::string opResponse = kickOp.getOutBuf();
+	std::string victimResponse = victim.getOutBuf();
+	
+	bool hasKick = (opResponse.find("KICK") != std::string::npos);
+	bool hasChannel = (opResponse.find("#testkick") != std::string::npos);
+	bool hasVictim = (opResponse.find("victim") != std::string::npos);
+	
+	std::cout << "  Has KICK: " << (hasKick ? "yes" : "no") << "\n";
+	std::cout << "  Has channel: " << (hasChannel ? "yes" : "no") << "\n";
+	std::cout << "  Has victim: " << (hasVictim ? "yes" : "no") << "\n";
+
+	printTestResult("KICK without reason", hasKick && hasChannel && hasVictim);
+	
+	// Verify victim received KICK
+	bool victimGotKick = (victimResponse.find("KICK") != std::string::npos);
+	std::cout << "  Victim got KICK: " << (victimGotKick ? "yes" : "no") << "\n";
+	printTestResult("Victim received KICK", victimGotKick);
+	
+	// Verify victim is removed from channel
+	Channel* chan = server.findChannel("#testkick");
+	bool removed = (!chan || !chan->isMember(506));
+	std::cout << "  Victim removed: " << (removed ? "yes" : "no") << "\n";
+	printTestResult("Victim removed from channel", removed);
+	
+	// Test 9: Successful KICK with reason
+	std::cout << "\nTest 9: Successful KICK with reason\n";
+
+	Client kickOp2(507);
+	kickOp2.setAuthenticated(true);
+	kickOp2.setNickname("kickop2");
+	kickOp2.setUsername("kickop2");
+	kickOp2.setRegistered(true);
+
+	Client victim2(508);
+	victim2.setAuthenticated(true);
+	victim2.setNickname("victim2");
+	victim2.setUsername("victim2");
+	victim2.setRegistered(true);
+
+	handler.handleCommand("JOIN #reasonkick\r\n", kickOp2);
+	handler.handleCommand("JOIN #reasonkick\r\n", victim2);
+	
+	kickOp2.consumeOutBuf(kickOp2.getOutBuf().size());
+	victim2.consumeOutBuf(victim2.getOutBuf().size());
+	
+	// Kick with reason
+	handler.handleCommand("KICK #reasonkick victim2 :Bad behavior\r\n", kickOp2);
+
+	opResponse = kickOp2.getOutBuf();
+	victimResponse = victim2.getOutBuf();
+	
+	hasKick = (opResponse.find("KICK") != std::string::npos);
+	bool hasReason = (opResponse.find("Bad behavior") != std::string::npos);
+	
+	std::cout << "  Has KICK: " << (hasKick ? "yes" : "no") << "\n";
+	std::cout << "  Has reason: " << (hasReason ? "yes" : "no") << "\n";
+
+	printTestResult("KICK with reason", hasKick && hasReason);
+	
+	// Verify victim received reason
+	bool victimGotReason = (victimResponse.find("Bad behavior") != std::string::npos);
+	std::cout << "  Victim got reason: " << (victimGotReason ? "yes" : "no") << "\n";
+	printTestResult("Victim received reason", victimGotReason);
+	
+	// Test 10: KICK broadcasts to all channel members
+	std::cout << "\nTest 10: KICK broadcasts to all channel members\n";
+
+	Client op(509);
+	op.setAuthenticated(true);
+	op.setNickname("op");
+	op.setUsername("op");
+	op.setRegistered(true);
+
+	Client user1(510);
+	user1.setAuthenticated(true);
+	user1.setNickname("user1");
+	user1.setUsername("user1");
+	user1.setRegistered(true);
+
+	Client user2(511);
+	user2.setAuthenticated(true);
+	user2.setNickname("user2");
+	user2.setUsername("user2");
+	user2.setRegistered(true);
+
+	// All join channel
+	handler.handleCommand("JOIN #broadcast\r\n", op);
+	handler.handleCommand("JOIN #broadcast\r\n", user1);
+	handler.handleCommand("JOIN #broadcast\r\n", user2);
+	
+	op.consumeOutBuf(op.getOutBuf().size());
+	user1.consumeOutBuf(user1.getOutBuf().size());
+	user2.consumeOutBuf(user2.getOutBuf().size());
+	
+	// Op kicks user1
+	handler.handleCommand("KICK #broadcast user1 :Kicked!\r\n", op);
+
+	std::string opOut = op.getOutBuf();
+	std::string user1Out = user1.getOutBuf();
+	std::string user2Out = user2.getOutBuf();
+	
+	bool opSeesKick = (opOut.find("KICK") != std::string::npos);
+	bool user1SeesKick = (user1Out.find("KICK") != std::string::npos);
+	bool user2SeesKick = (user2Out.find("KICK") != std::string::npos);
+	
+	std::cout << "  Op sees KICK: " << (opSeesKick ? "yes" : "no") << "\n";
+	std::cout << "  User1 sees KICK: " << (user1SeesKick ? "yes" : "no") << "\n";
+	std::cout << "  User2 sees KICK: " << (user2SeesKick ? "yes" : "no") << "\n";
+
+	printTestResult("KICK broadcasts to all members", opSeesKick && user1SeesKick && user2SeesKick);
+	
+	std::cout << "=== KICK Command Tests Complete ===\n";
+}
+
 /**
  * @brief Test Registration Flow (PASS -> NICK -> USER)
  */
@@ -642,7 +892,8 @@ int main() {
 		// testQuitCommand(server, handler);
 		// testPrivmsgCommand(server, handler);
 		// testJoinCommand(server, handler);
-		testPartCommand(server, handler);
+		// testPartCommand(server, handler);
+		testKickCommand(server, handler);
 		
 		std::cout << "\n======================================\n";
 		std::cout << "          All Tests Completed!         \n";
