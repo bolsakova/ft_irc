@@ -108,6 +108,12 @@ Client* Server::findClientByNickname(const std::string& nickname)
     return NULL;
 }
 
+// TANJA: Добавить клиента в карту клиентов (для тестов)
+void Server::addClient(int fd, std::unique_ptr<Client> client)
+{
+    m_clients[fd] = std::move(client);
+}
+
 // Создать канал, если его ещё нет; вернуть указатель на существующий/новый.
 Channel* Server::createChannel(const std::string& name)
 {

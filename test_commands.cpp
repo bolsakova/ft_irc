@@ -834,6 +834,259 @@ void testKickCommand(Server& server, CommandHandler& handler)
 	std::cout << "=== KICK Command Tests Complete ===\n";
 }
 
+void testInviteCommand(Server& server, CommandHandler& handler)
+{
+	std::cout << "\n=== Testing INVITE Command ===\n";
+
+	// Test 1: INVITE without registration
+	std::cout << "\nTest 1: INVITE without registration\n";
+	Client unregistered(600);
+	unregistered.setRegistered(false);
+
+	handler.handleCommand("INVITE user1 #test\r\n", unregistered);
+	std::string response = unregistered.getOutBuf();
+
+	bool hasError = (response.find("451") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NOTREGISTERED", hasError);
+
+	// Test 2: INVITE without nickname parameter
+	std::cout << "\nTest 2: INVITE without nickname parameter\n";
+	Client registered(601);
+	registered.setAuthenticated(true);
+	registered.setNickname("inviter");
+	registered.setUsername("inviter");
+	registered.setRegistered(true);
+
+	handler.handleCommand("INVITE\r\n", registered);
+	response = registered.getOutBuf();
+
+	hasError = (response.find("461") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NEEDMOREPARAMS", hasError);
+
+	// Test 3: INVITE without channel parameter
+	std::cout << "\nTest 3: INVITE without channel parameter\n";
+	registered.consumeOutBuf(registered.getOutBuf().size());
+
+	handler.handleCommand("INVITE user1\r\n", registered);
+	response = registered.getOutBuf();
+
+	hasError = (response.find("461") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NEEDMOREPARAMS", hasError);
+
+	// Test 4: INVITE to non-existent channel
+	std::cout << "\nTest 4: INVITE to non-existent channel\n";
+	registered.consumeOutBuf(registered.getOutBuf().size());
+
+	handler.handleCommand("INVITE user1 #nonexistent\r\n", registered);
+	response = registered.getOutBuf();
+
+	hasError = (response.find("403") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NOSUCHCHANNEL", hasError);
+
+	// Test 5: INVITE when not on channel
+	std::cout << "\nTest 5: INVITE when not on channel\n";
+
+	// Create channel with another user
+	Client chanOp(602);
+	chanOp.setAuthenticated(true);
+	chanOp.setNickname("chanop");
+	chanOp.setUsername("chanop");
+	chanOp.setRegistered(true);
+
+	handler.handleCommand("JOIN #invitetest\r\n", chanOp);
+	chanOp.consumeOutBuf(chanOp.getOutBuf().size());
+	
+	// Try to INVITE from someone not on channel
+	Client outsider(603);
+	outsider.setAuthenticated(true);
+	outsider.setNickname("outsider");
+	outsider.setUsername("outsider");
+	outsider.setRegistered(true);
+	
+	handler.handleCommand("INVITE chanop #invitetest\r\n", outsider);
+	response = outsider.getOutBuf();
+
+	hasError = (response.find("442") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NOTONCHANNEL", hasError);
+
+	// Test 6: INVITE on +i when not operator
+	std::cout << "\nTest 6: INVITE on +i when not operator\n";
+
+	// Create invite-only channel
+	Channel* inviteChan = server.createChannel("#inviteonly");
+	inviteChan->setInviteOnly(true);
+
+	Client op(604);
+	op.setAuthenticated(true);
+	op.setNickname("op");
+	op.setUsername("op");
+	op.setRegistered(true);
+
+	Client normalUser(605);
+	normalUser.setAuthenticated(true);
+	normalUser.setNickname("normaluser");
+	normalUser.setUsername("normaluser");
+	normalUser.setRegistered(true);
+
+	// Op creates channel (becomes operator)
+	inviteChan->addMember(&op);
+	inviteChan->addOperator(op.getFD());
+
+	// Normal user joins (need to bypass +i for test setup)
+	inviteChan->addInvited(normalUser.getFD());
+	inviteChan->addMember(&normalUser);
+
+	// Normal user tries to invite someone
+	handler.handleCommand("INVITE guest #inviteonly\r\n", normalUser);
+	response = normalUser.getOutBuf();
+
+	hasError = (response.find("482") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_CHANOPRIVSNEEDED", hasError);
+
+	// Test 7: INVITE non-existent user
+	std::cout << "\nTest 7: INVITE non-existent user\n";
+
+	Client inviter(606);
+	inviter.setAuthenticated(true);
+	inviter.setNickname("inviter");
+	inviter.setUsername("inviter");
+	inviter.setRegistered(true);
+
+	handler.handleCommand("JOIN #testinv\r\n", inviter);
+	inviter.consumeOutBuf(inviter.getOutBuf().size());
+	
+	handler.handleCommand("INVITE nonexistent #testinv\r\n", inviter);
+	response = inviter.getOutBuf();
+
+	hasError = (response.find("401") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NOSUCHNICK", hasError);
+
+	// Test 8: INVITE user already on channel
+	std::cout << "\nTest 8: INVITE user already on channel\n";
+
+	Client member1(607);
+	member1.setAuthenticated(true);
+	member1.setNickname("member1");
+	member1.setUsername("member1");
+	member1.setRegistered(true);
+
+	Client member2(608);
+	member2.setAuthenticated(true);
+	member2.setNickname("member2");
+	member2.setUsername("member2");
+	member2.setRegistered(true);
+
+	// Both join channel
+	handler.handleCommand("JOIN #testinv2\r\n", member1);
+	handler.handleCommand("JOIN #testinv2\r\n", member2);
+	
+	member1.consumeOutBuf(member1.getOutBuf().size());
+	member2.consumeOutBuf(member2.getOutBuf().size());
+	
+	// Try to invite member2 who is already on channel
+	handler.handleCommand("INVITE member2 #testinv2\r\n", member1);
+	response = member1.getOutBuf();
+
+	hasError = (response.find("443") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_USERONCHANNEL", hasError);
+
+	// Test 9: Successful INVITE
+	std::cout << "\nTest 9: Successful INVITE\n";
+
+	// Add clients to server
+	Client* host = new Client(609);
+	host->setAuthenticated(true);
+	host->setNickname("host");
+	host->setUsername("host");
+	host->setRegistered(true);
+	server.addClient(609, std::unique_ptr<Client>(host));
+
+	Client* guest = new Client(610);
+	guest->setAuthenticated(true);
+	guest->setNickname("guest");
+	guest->setUsername("guest");
+	guest->setRegistered(true);
+	server.addClient(610, std::unique_ptr<Client>(guest));
+
+	// Host creates channel
+	handler.handleCommand("JOIN #party\r\n", *host);
+	host->consumeOutBuf(host->getOutBuf().size());
+	
+	// Host invites guest
+	handler.handleCommand("INVITE guest #party\r\n", *host);
+
+	std::string hostResponse = host->getOutBuf();
+	std::string guestResponse = guest->getOutBuf();
+	
+	bool hasInviting = (hostResponse.find("341") != std::string::npos);
+	bool hasInvite = (guestResponse.find("INVITE") != std::string::npos);
+	bool hasChannel = (guestResponse.find("#party") != std::string::npos);
+	
+	std::cout << "  Host response: " << hostResponse;
+	std::cout << "  Guest response: " << guestResponse;
+	std::cout << "  Has RPL_INVITING (341): " << (hasInviting ? "yes" : "no") << "\n";
+	std::cout << "  Guest got INVITE: " << (hasInvite ? "yes" : "no") << "\n";
+
+	printTestResult("Successful INVITE", hasInviting && hasInvite && hasChannel);
+	
+	// Test 10: INVITE allows joining +i channel
+	std::cout << "\nTest 10: INVITE allows joining +i channel\n";
+
+	// Create invite-only channel
+	// Channel* privateChan = server.createChannel("#private");
+	// privateChan->setInviteOnly(true);
+
+	Client* owner = new Client(611);
+	owner->setAuthenticated(true);
+	owner->setNickname("owner");
+	owner->setUsername("owner");
+	owner->setRegistered(true);
+	server.addClient(611, std::unique_ptr<Client>(owner));
+
+	Client* invited = new Client(612);
+	invited->setAuthenticated(true);
+	invited->setNickname("invited");
+	invited->setUsername("invited");
+	invited->setRegistered(true);
+	server.addClient(612, std::unique_ptr<Client>(invited));
+
+	// Owner creates +i channel
+	handler.handleCommand("JOIN #private\r\n", *owner);
+	Channel* privateChan = server.findChannel("#private");
+	privateChan->setInviteOnly(true);
+	
+	owner->consumeOutBuf(owner->getOutBuf().size());
+	invited->consumeOutBuf(invited->getOutBuf().size());
+	
+	// Owner invites user
+	handler.handleCommand("INVITE invited #private\r\n", *owner);
+	owner->consumeOutBuf(owner->getOutBuf().size());
+	invited->consumeOutBuf(invited->getOutBuf().size());
+	
+	// Invited user can now join
+	handler.handleCommand("JOIN #private\r\n", *invited);
+	response = invited->getOutBuf();
+
+	bool hasJoin = (response.find("JOIN") != std::string::npos);
+	bool noError = (response.find("473") == std::string::npos);
+	
+	std::cout << "  Invited user response: " << response;
+	std::cout << "  Has JOIN: " << (hasJoin ? "yes" : "no") << "\n";
+	std::cout << "  No invite error: " << (noError ? "yes" : "no") << "\n";
+
+	printTestResult("Invited user can join +i channel", hasJoin && noError);
+	
+	std::cout << "=== INVITE Command Tests Complete ===\n";
+}
+
 /**
  * @brief Test Registration Flow (PASS -> NICK -> USER)
  */
@@ -893,7 +1146,8 @@ int main() {
 		// testPrivmsgCommand(server, handler);
 		// testJoinCommand(server, handler);
 		// testPartCommand(server, handler);
-		testKickCommand(server, handler);
+		// testKickCommand(server, handler);
+		testInviteCommand(server, handler);
 		
 		std::cout << "\n======================================\n";
 		std::cout << "          All Tests Completed!         \n";
