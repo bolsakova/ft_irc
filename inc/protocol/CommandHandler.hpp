@@ -33,6 +33,7 @@ class CommandHandler {
 			void handleJoin(Client& client, const Message& msg);	// JOIN
 			void handlePart(Client& client, const Message& msg);	// PART
 			void handleKick(Client& client, const Message& msg);	// KICK
+			void handleInvite(Client& client, const Message& msg);	// INVITE
 
 			bool isNicknameInUse(const std::string& nickname, int exclude_fd = -1);	// Check if nickname is already taken by another client
 			bool isValidNickname(const std::string& nickname);						// Validate nickname according to RFC 1459

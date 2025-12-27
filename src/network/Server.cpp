@@ -96,6 +96,18 @@ Channel* Server::findChannel(const std::string& name)
 	return it->second.get();
 }
 
+// TANJA: Найти клиента по nickname
+Client* Server::findClientByNickname(const std::string& nickname)
+{
+    for (std::map<int, std::unique_ptr<Client>>::iterator it = m_clients.begin();
+        it != m_clients.end(); ++it)
+    {
+        if (it->second->getNickname() == nickname)
+            return it->second.get();
+    }
+    return NULL;
+}
+
 // Создать канал, если его ещё нет; вернуть указатель на существующий/новый.
 Channel* Server::createChannel(const std::string& name)
 {

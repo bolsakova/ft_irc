@@ -59,6 +59,8 @@ class Server
 	void run();
 	const std::map<int, std::unique_ptr<Client>>& getClients() const;
 	Channel* findChannel(const std::string& name);
+	// TANJA
+	Client* findClientByNickname(const std::string& nickname);
 	Channel* createChannel(const std::string& name);
 	void removeChannel(const std::string& name);
 	const std::map<std::string, std::unique_ptr<Channel>>& getChannels() const;

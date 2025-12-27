@@ -1100,6 +1100,184 @@ void CommandHandler::handleKick(Client& client, const Message& msg) {
 }
 
 /**
+ * @brief Handle INVITE command - invite user to channel
+ * Format: INVITE <nickname> <channel>
+ * 
+ * @param client Client sending the command
+ * @param msg Parsed message with command and parameters
+ * 
+ * Algorithm:
+ * 		1. Check if client is registered
+ * 		2. Verify nickname and channel parameters are provided
+ * 		3. Validate channel exists
+ * 		4. Check if sender is on the channel
+ * 		5. Check if sender is operator (if channel is +i)
+ * 		6. Find target user by nickname
+ * 		7. Check if target is already on channel
+ * 		8. Add target to invited list
+ * 		9. Send INVITE notification to target
+ * 		10. Send RPL_INVITING confirmation to sender
+ * 
+ * Responses:
+ * 		- ERR_NEEDMOREPARAMS (461): Missing nickname or channel parameter
+ * 		- ERR_NOSUCHCHANNEL (403): Channel doesn't exist
+ * 		- ERR_NOTONCHANNEL (442): Sender is not on that channel
+ * 		- ERR_CHANOPRIVSNEEDED (482): Need operator privileges (for +i channels)
+ * 		- ERR_NOSUCHNICK (401): Target user doesn't exist
+ * 		- ERR_USERONCHANNEL (443): Target is already on channel
+ * 		- Success: INVITE message to target + RPL_INVITING (341) to sender
+ */
+void CommandHandler::handleInvite(Client& client, const Message& msg) {
+	// Check if client is registered
+	if (!client.isRegistered())
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOTREGISTERED,
+			"*", "",
+			"You have not registered"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Check if both channel and nickname parameters are provided
+	if (msg.params.size() < 2)
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NEEDMOREPARAMS,
+			client.getNickname(),
+			"INVITE",
+			"Not enough parameters"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	std::string target_nick = msg.params[0];
+	std::string channel_name = msg.params[1];
+
+	// Find channel
+	Channel* chan = m_server.findChannel(channel_name);
+
+	if (!chan)
+	{
+		// Channel doesn't exist
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOSUCHCHANNEL,
+			client.getNickname(),
+			channel_name,
+			"No such channel"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Check if sender is a member of the channel
+	if (!chan->isMember(client.getFD()))
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOTONCHANNEL,
+			client.getNickname(),
+			channel_name,
+			"You're not on that channel"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Check if sender is operator (required for +i channels)
+	if (chan->isInviteOnly() && !chan->isOperator(client.getFD()))
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_CHANOPRIVSNEEDED,
+			client.getNickname(),
+			channel_name,
+			"You're not channel operator"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Find target user by nickname - search in channel members first
+	Client* target_client = nullptr;
+	int target_fd = -1;
+	
+	const std::map<int, Client*>& members = chan->getMembers();
+	for (std::map<int, Client*>::const_iterator it = members.begin();
+		it != members.end(); ++it)
+	{
+		if (it->second->getNickname() == target_nick)
+		{
+			target_client = it->second;
+			target_fd = it->first;
+			break;
+		}
+	}
+
+	// If not found in channel, search in all clients
+	if (!target_client)
+	{
+		target_client = m_server.findClientByNickname(target_nick);
+		if (target_client)
+			target_fd = target_client->getFD();
+	}
+
+	// Check if target user exists
+	if (!target_client)
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOSUCHNICK,
+			client.getNickname(),
+			target_nick,
+			"no such nick/channel"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Check if target is already on the channel
+	if (chan->isMember(target_fd))
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_USERONCHANNEL,
+			client.getNickname(),
+			target_nick + " " + channel_name,
+			"is already on channel"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Add target to invited list
+	chan->addInvited(target_fd);
+
+	// Build INVITE message for target
+	// Format: :sender!user@host INVITE target :#channel
+	std::string prefix = client.getNickname() + "!" +
+						client.getUsername() + "@localhost";
+	std::vector<std::string> params;
+	params.push_back(target_nick);
+	
+	std::string invite_msg = MessageBuilder::buildCommandMessage(
+		prefix, "INVITE", params, channel_name
+	);
+	
+	// Send INVITE to target user
+	sendReply(*target_client, invite_msg);
+	
+	// Send RPL_INVITING (341) to sender
+    // Format: :server 341 sender target #channel
+	std::string inviting_reply = MessageBuilder::buildNumericReply(
+		m_server_name, RPL_INVITING, client.getNickname(),
+		target_nick + " " + channel_name
+	);
+	sendReply(client, inviting_reply);
+
+	std::cout << client.getNickname() << " invited " << target_nick
+				<< " to " << channel_name << "\n";
+}
+
+/**
  * @brief Main command dispatcher - routes commands to appropriate handlers.
  * 
  * @param raw_command Complete IRC command with \r\n
@@ -1141,6 +1319,8 @@ void CommandHandler::handleCommand(const std::string& raw_command, Client& clien
 			handlePart(client, msg);
 		else if (msg.command == "KICK")
 			handleKick(client, msg);
+		else if (msg.command == "INVITE")
+			handleInvite(client, msg);
 		else {
 			// Command not recognized or not implemented
 			std::string error = MessageBuilder::buildErrorReply(
