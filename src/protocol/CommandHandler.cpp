@@ -1049,16 +1049,16 @@ void CommandHandler::handleKick(Client& client, const Message& msg) {
 	}
 
 	// Find target user by nickname
-	const std::map<int, std::unique_ptr<Client>>& clients = m_server.getClients();
 	Client* target_client = nullptr;
 	int target_fd = -1;
-
-	for (std::map<int, std::unique_ptr<Client>>::const_iterator it = clients.begin();
-		it != clients.end(); ++it)
+	
+	const std::map<int, Client*>& members = chan->getMembers();
+	for (std::map<int, Client*>::const_iterator it = members.begin();
+		it != members.end(); ++it)
 	{
 		if (it->second->getNickname() == target_nick)
 		{
-			target_client = it->second.get();
+			target_client = it->second;
 			target_fd = it->first;
 			break;
 		}

@@ -62,7 +62,6 @@ class Server
 	Channel* createChannel(const std::string& name);
 	void removeChannel(const std::string& name);
 	const std::map<std::string, std::unique_ptr<Channel>>& getChannels() const;
-
 };
 
 #endif

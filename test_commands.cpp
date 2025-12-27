@@ -630,7 +630,7 @@ void testKickCommand(Server& server, CommandHandler& handler)
 	std::cout << "\nTest 4: KICK from non-existent channel\n";
 	registered.consumeOutBuf(registered.getOutBuf().size());
 
-	handler.handleCommand("PART #nonexistent user1\r\n", registered);
+	handler.handleCommand("KICK #nonexistent user1\r\n", registered);
 	response = registered.getOutBuf();
 
 	hasError = (response.find("403") != std::string::npos);
