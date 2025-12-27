@@ -950,6 +950,156 @@ void CommandHandler::handlePart(Client& client, const Message& msg) {
 }
 
 /**
+ * @brief Handle KICK command - operator removes user from channel
+ * Format: KICK <channel> <user> [<reason>]
+ * 
+ * @param client Client sending the command
+ * @param msg Parsed message with command and parameters
+ * 
+ * Algorithm:
+ * 		1. Check if client is registered
+ * 		2. Verify channel and user parameters are provided
+ * 		3. Validate channel exists
+ * 		4. Check if sender is on the channel
+ * 		5. Check if sender is a channel operator
+ * 		6. Find target user by nickname
+ * 		7. Check if target is on the channel
+ * 		8. Remove target from channel
+ * 		9. Broadcast KICK message to all channel members (including kicked user)
+ * 		10. Optionally include reason
+ * 
+ * Responses:
+ * 		- ERR_NEEDMOREPARAMS (461): Missing channel or user parameter
+ * 		- ERR_NOSUCHCHANNEL (403): Channel doesn't exist
+ * 		- ERR_NOTONCHANNEL (442): Sender is not on that channel
+ * 		- ERR_CHANOPRIVSNEEDED (482): Sender is not a channel operator
+ * 		- ERR_USERNOTINCHANNEL (441): Target user is not on channel
+ * 		- Success: :operator!user@host KICK #channel target [:reason]
+ */
+void CommandHandler::handleKick(Client& client, const Message& msg) {
+	// Check if client is registered
+	if (!client.isRegistered())
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOTREGISTERED,
+			"*", "",
+			"You have not registered"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Check if both channel and user parameters are provided
+	if (msg.params.size() < 2)
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NEEDMOREPARAMS,
+			client.getNickname(),
+			"KICK",
+			"Not enough parameters"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	std::string channel_name = msg.params[0];
+	std::string target_nick = msg.params[1];
+	std::string reason = msg.trailing.empty() ? client.getNickname() : msg.trailing;
+
+	// Find channel
+	Channel* chan = m_server.findChannel(channel_name);
+
+	if (!chan)
+	{
+		// Channel doesn't exist
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOSUCHCHANNEL,
+			client.getNickname(),
+			channel_name,
+			"No such channel"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Check if sender is a member of the channel
+	if (!chan->isMember(client.getFD()))
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOTONCHANNEL,
+			client.getNickname(),
+			channel_name,
+			"You're not on that channel"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Check if sender is a channel operator
+	if (!chan->isOperator(client.getFD()))
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_CHANOPRIVSNEEDED,
+			client.getNickname(),
+			channel_name,
+			"You're not channel operator"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Find target user by nickname
+	const std::map<int, std::unique_ptr<Client>>& clients = m_server.getClients();
+	Client* target_client = nullptr;
+	int target_fd = -1;
+
+	for (std::map<int, std::unique_ptr<Client>>::const_iterator it = clients.begin();
+		it != clients.end(); ++it)
+	{
+		if (it->second->getNickname() == target_nick)
+		{
+			target_client = it->second.get();
+			target_fd = it->first;
+			break;
+		}
+	}
+
+	// Check if target exists and is on the channel
+	if (!target_client || !chan->isMember(target_fd))
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_USERNOTINCHANNEL,
+			client.getNickname(),
+			target_nick + " " + channel_name,
+			"They aren't on that channel"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Build KICK message
+	// Format: :operator!user@host KICK #channel target :reason
+	std::string prefix = client.getNickname() + "!" +
+						client.getUsername() + "@localhost";
+	std::vector<std::string> params;
+	params.push_back(channel_name);
+	params.push_back(target_nick);
+	
+	std::string kick_msg = MessageBuilder::buildCommandMessage(
+		prefix, "KICK", params, reason
+	);
+
+	// Broadcast KICK to all channel members (including kicked user)
+	chan->broadcast(kick_msg);
+
+	std::cout << client.getNickname() << " kicked " << target_nick
+				<< " from " << channel_name << " (" << reason << ")\n";
+
+	// Remove target from channel
+	chan->removeMember(target_fd);
+}
+
+/**
  * @brief Main command dispatcher - routes commands to appropriate handlers.
  * 
  * @param raw_command Complete IRC command with \r\n
@@ -989,6 +1139,8 @@ void CommandHandler::handleCommand(const std::string& raw_command, Client& clien
 			handleJoin(client, msg);
 		else if (msg.command == "PART")
 			handlePart(client, msg);
+		else if (msg.command == "KICK")
+			handleKick(client, msg);
 		else {
 			// Command not recognized or not implemented
 			std::string error = MessageBuilder::buildErrorReply(
