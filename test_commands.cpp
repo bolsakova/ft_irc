@@ -1329,6 +1329,423 @@ void testTopicCommand(Server& server, CommandHandler& handler)
 	std::cout << "=== TOPIC Command Tests Complete ===\n";
 }
 
+void testModeCommand(Server& server, CommandHandler& handler)
+{
+	std::cout << "\n=== Testing MODE Command ===\n";
+
+	// Test 1: MODE without registration
+	std::cout << "\nTest 1: MODE without registration\n";
+	Client unregistered(700);
+	unregistered.setRegistered(false);
+
+	handler.handleCommand("MODE #test\r\n", unregistered);
+	std::string response = unregistered.getOutBuf();
+
+	bool hasError = (response.find("451") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NOTREGISTERED", hasError);
+	
+	// Test 2: MODE without channel parameter
+	std::cout << "\nTest 2: MODE without channel parameter\n";
+
+	Client registered(701);
+	registered.setAuthenticated(true);
+	registered.setNickname("modeuser");
+	registered.setUsername("modeuser");
+	registered.setRegistered(true);
+	
+	handler.handleCommand("MODE\r\n", registered);
+	response = registered.getOutBuf();
+
+	hasError = (response.find("461") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NEEDMOREPARAMS", hasError);
+
+	// Test 3: MODE for non-existent channel
+	std::cout << "\nTest 3: MODE for non-existent channel\n";
+	registered.consumeOutBuf(registered.getOutBuf().size());
+
+	handler.handleCommand("MODE #nonexistent\r\n", registered);
+	response = registered.getOutBuf();
+
+	hasError = (response.find("403") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NOSUCHCHANNEL", hasError);
+
+	// Test 4: MODE when not on channel
+	std::cout << "\nTest 4: MODE when not on channel\n";
+
+	Client chanOwner(702);
+	chanOwner.setAuthenticated(true);
+	chanOwner.setNickname("owner");
+	chanOwner.setUsername("owner");
+	chanOwner.setRegistered(true);
+
+	handler.handleCommand("JOIN #modetest\r\n", chanOwner);
+	chanOwner.consumeOutBuf(chanOwner.getOutBuf().size());
+	
+	Client outsider(703);
+	outsider.setAuthenticated(true);
+	outsider.setNickname("outsider");
+	outsider.setUsername("outsider");
+	outsider.setRegistered(true);
+	
+	handler.handleCommand("MODE #modetest\r\n", outsider);
+	response = outsider.getOutBuf();
+
+	hasError = (response.find("442") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NOTONCHANNEL", hasError);
+	
+	// Test 5: MODE viewing (no mode string)
+	std::cout << "\nTest 5: MODE viewing current modes\n";
+	chanOwner.consumeOutBuf(chanOwner.getOutBuf().size());
+	
+	handler.handleCommand("MODE #modetest\r\n", chanOwner);
+	response = chanOwner.getOutBuf();
+
+	bool hasChannelModeis = (response.find("324") != std::string::npos);
+	bool hasChannel = (response.find("#modetest") != std::string::npos);
+	
+	std::cout << "  Response: " << response;
+	std::cout << "  Has RPL_CHANNELMODEIS (324): " << (hasChannelModeis ? "yes" : "no") << "\n";
+	
+	printTestResult("Mode viewing", hasChannelModeis && hasChannel);
+
+	// Test 6: MODE change without operator privileges
+	std::cout << "\nTest 6: MODE change without operator privileges\n";
+	
+	Client normalUser(704);
+	normalUser.setAuthenticated(true);
+	normalUser.setNickname("normal");
+	normalUser.setUsername("normal");
+	normalUser.setRegistered(true);
+	
+	handler.handleCommand("JOIN #modetest\r\n", normalUser);
+	normalUser.consumeOutBuf(normalUser.getOutBuf().size());
+	
+	handler.handleCommand("MODE #modetest\r\n", normalUser);
+	response = normalUser.getOutBuf();
+	
+	hasError = (response.find("482") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_CHANOPRIVSNEEDED", hasError);
+	
+	// Test 7: MODE +i (invite-only)
+	std::cout << "\nTest 7: MODE +i (invite-only)\n";
+	
+	Client op(705);
+	op.setAuthenticated(true);
+	op.setNickname("operator");
+	op.setUsername("operator");
+	op.setRegistered(true);
+	
+	handler.handleCommand("JOIN #testmodes\r\n", op);
+	op.consumeOutBuf(op.getOutBuf().size());
+	
+	handler.handleCommand("MODE #testmodes +i\r\n", op);
+	response = op.getOutBuf();
+	
+	bool hasMode = (response.find("MODE") != std::string::npos);
+	bool hasInviteMode = (response.find("+i") != std::string::npos);
+	
+	std::cout << "  Response: " << response;
+	printTestResult("MODE +i", hasMode && hasInviteMode);
+	
+	// Verify mode was set
+	Channel* chan = server.findChannel("#testmodes");
+	bool isInviteOnly = (chan && chan->isInviteOnly());
+	std::cout << "  Channel is invite-only: " << (isInviteOnly ? "yes" : "no") << "\n";
+	printTestResult("Invite-only mode set", isInviteOnly);
+
+	// Test 8: MODE -i (remove invite-only)
+	std::cout << "\nTest 8: MODE -i (remove invite-only)\n";
+	op.consumeOutBuf(op.getOutBuf().size());
+
+	handler.handleCommand("MODE #testmodes -i\r\n", op);
+	response = op.getOutBuf();
+
+	hasMode = (response.find("MODE") != std::string::npos);
+	bool hasMinusI = (response.find("-i") != std::string::npos);
+
+	std::cout << "  Response: " << response;
+	printTestResult("MODE -i", hasMode && hasMinusI);
+
+	// Verify mode was removed
+	isInviteOnly = chan->isInviteOnly();
+	std::cout << "  Channel is invite-only: " << (isInviteOnly ? "yes" : "no") << "\n";
+	printTestResult("Invite-only mode removed", !isInviteOnly);
+	
+	// Test 9: MODE +t (topic protection)
+	std::cout << "\nTest 9: MODE +t (topic protection)\n";
+	op.consumeOutBuf(op.getOutBuf().size());
+
+	handler.handleCommand("MODE #testmodes +t\r\n", op);
+	response = op.getOutBuf();
+
+	hasMode = (response.find("MODE") != std::string::npos);
+	bool hasTopicMode = (response.find("+t") != std::string::npos);
+	
+	std::cout << "  Response: " << response;
+	printTestResult("MODE +t", hasMode && hasTopicMode);
+
+	// Verify mode was set
+	bool isTopicProtected = (chan && chan->isTopicProtected());
+	std::cout << "  topic is protected: " << (isTopicProtected ? "yes" : "no") << "\n";
+	printTestResult("Topic protection set", isTopicProtected);
+	
+	// Test 10: MODE +k (set key)
+	std::cout << "\nTest 10: MODE +k (set key)\n";
+	op.consumeOutBuf(op.getOutBuf().size());
+
+	handler.handleCommand("MODE #testmodes +k secretpass\r\n", op);
+	response = op.getOutBuf();
+
+	hasMode = (response.find("MODE") != std::string::npos);
+	bool hasKeyMode = (response.find("+k") != std::string::npos);
+	bool hasKey = (response.find("secretpass") != std::string::npos);
+	
+	std::cout << "  Response: " << response;
+	printTestResult("MODE +k", hasMode && hasKeyMode && hasKey);
+
+	// Verify key was set
+	bool channelHasKey = (chan && chan->hasKey());
+	std::cout << "  Channel has key: " << (channelHasKey ? "yes" : "no") << "\n";
+	printTestResult("Channel key set", channelHasKey);
+
+	// Test 11: MODE +k without parameter (error)
+	std::cout << "\nTest 11: MODE +k without parameter\n";
+	op.consumeOutBuf(op.getOutBuf().size());
+	
+	handler.handleCommand("MODE #testmodes +k\r\n", op);
+	response = op.getOutBuf();
+
+	hasError = (response.find("461") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NEEDMOREPARAMS for +k", hasError);
+
+	// Test 12: MODE -k (remove key)
+	std::cout << "\nTest 12: MODE -k (remove key)\n";
+	op.consumeOutBuf(op.getOutBuf().size());
+
+	handler.handleCommand("MODE #testmodes -k\r\n", op);
+	response = op.getOutBuf();
+
+	hasMode = (response.find("MODE") != std::string::npos);
+	bool hasMinusK = (response.find("-k") != std::string::npos);
+
+	std::cout << "  Response: " << response;
+	printTestResult("MODE -k", hasMode && hasMinusK);
+
+	// Verify key was removed
+	channelHasKey = chan->hasKey();
+	std::cout << "  Channel has key: " << (channelHasKey ? "yes" : "no") << "\n";
+	printTestResult("Channel key removed", !channelHasKey);
+
+	// Test 13: MODE +o for user not in server (error)
+    std::cout << "\nTest 13: MODE +o for non-existent user\n";
+
+	Client target(706);
+	target.setAuthenticated(true);
+	target.setNickname("target");
+	target.setUsername("target");
+	target.setRegistered(true);
+	
+	handler.handleCommand("JOIN #testmodes\r\n", target);
+	target.consumeOutBuf(target.getOutBuf().size());
+	op.consumeOutBuf(op.getOutBuf().size());
+
+	handler.handleCommand("MODE #testmodes +o target\r\n", op);	
+	response = op.getOutBuf();
+
+	hasMode = (response.find("MODE") != std::string::npos);
+	bool hasOpMode = (response.find("+o") != std::string::npos);
+	bool hasTargetNick = (response.find("target") != std::string::npos);
+
+	std::cout << "  Response: " << response;
+	printTestResult("MODE +o", hasMode && hasOpMode && hasTargetNick);
+
+	// Verify target is now operator
+	bool isOp = (chan && chan->isOperator(target.getFD()));
+	std::cout << "  Target is operator: " << (isOp ? "yes" : "no") << "\n";
+	printTestResult("Operator privilege granted", isOp);
+
+	// Test 14: MODE +o without parameter (error)
+	std::cout << "\nTest 14: MODE +o without parameter\n";
+	op.consumeOutBuf(op.getOutBuf().size());
+	
+	handler.handleCommand("MODE #testmodes +o\r\n", op);
+	response = op.getOutBuf();
+
+	hasError = (response.find("461") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NEEDMOREPARAMS for +o", hasError);
+
+	// Test 15: MODE +o for user not on channel
+	std::cout << "\nTest 15: MODE +o for user not on channel\n";
+	
+	Client notOnChan(715);
+	notOnChan.setAuthenticated(true);
+	notOnChan.setNickname("notonchan");
+	notOnChan.setUsername("notonchan");
+	notOnChan.setRegistered(true);
+	
+	op.consumeOutBuf(op.getOutBuf().size());
+	
+	handler.handleCommand("MODE #testmodes +o notonchan\r\n", op);
+	response = op.getOutBuf();
+
+	hasError = (response.find("401") != std::string::npos || 
+            response.find("441") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("User not found or not on channel", hasError);
+
+	// Test 16: MODE -o without parameter
+	std::cout << "\nTest 16: MODE -o without parameter\n";
+	op.consumeOutBuf(op.getOutBuf().size());
+
+	handler.handleCommand("MODE #testmodes -o\r\n", op);
+	response = op.getOutBuf();
+
+	hasError = (response.find("461") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NEEDMOREPARAMS for -o", hasError);
+
+	// Test 17: MODE +l (set limit)
+	std::cout << "\nTest 17: MODE +l (set limit)\n";
+	op.consumeOutBuf(op.getOutBuf().size());
+
+	handler.handleCommand("MODE #testmodes +l 50\r\n", op);
+	response = op.getOutBuf();
+
+	hasMode = (response.find("MODE") != std::string::npos);
+	bool hasLimitMode = (response.find("+l") != std::string::npos);
+	bool hasLimit = (response.find("50") != std::string::npos);
+	
+	std::cout << "  Response: " << response;
+	printTestResult("MODE +l", hasMode && hasLimitMode && hasLimit);
+
+	// Verify limit was set
+	int userLimit = (chan ? chan->getUserLimit() : 0);
+	std::cout << "  User limit: " << userLimit << "\n";
+	printTestResult("User limit set", userLimit == 50);
+
+	// Test 18: MODE +l without parameter (error)
+	std::cout << "\nTest 18: MODE +l without parameter\n";
+	op.consumeOutBuf(op.getOutBuf().size());
+	
+	handler.handleCommand("MODE #testmodes +l\r\n", op);
+	response = op.getOutBuf();
+
+	hasError = (response.find("461") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NEEDMOREPARAMS for +l", hasError);
+
+	// Test 19: MODE -l (remove limit)
+	std::cout << "\nTest 19: MODE -l (remove limit)\n";
+	op.consumeOutBuf(op.getOutBuf().size());
+
+	handler.handleCommand("MODE #testmodes -l\r\n", op);
+	response = op.getOutBuf();
+
+	hasMode = (response.find("MODE") != std::string::npos);
+	bool hasMinusL = (response.find("-l") != std::string::npos);
+
+	std::cout << "  Response: " << response;
+	printTestResult("MODE -l", hasMode && hasMinusL);
+
+	// Verify limit was removed
+	int userLimit2 = chan->getUserLimit();
+	std::cout << "  User limit: " << userLimit2 << "\n";
+	printTestResult("User limit removed", userLimit2 == 0);
+
+	// Test 20: MODE with multiple modes (+nt)
+	std::cout << "\nTest 20: MODE with multiple modes (+nt)\n";
+	op.consumeOutBuf(op.getOutBuf().size());
+
+	handler.handleCommand("MODE #testmodes +nt\r\n", op);
+	response = op.getOutBuf();
+
+	hasMode = (response.find("MODE") != std::string::npos);
+	bool hasMultiple = (response.find("+nt") != std::string::npos) ||
+                       (response.find("+t") != std::string::npos && response.find("n") != std::string::npos);
+
+	std::cout << "  Response: " << response;
+	printTestResult("MODE +nt", hasMode && hasMultiple);
+
+	// Test 21: MODE with parametered modes (+kl)
+	std::cout << "\nTest 21: MODE with parametered modes (+kl)\n";
+	op.consumeOutBuf(op.getOutBuf().size());
+
+	handler.handleCommand("MODE #testmodes +kl mypass 100\r\n", op);
+	response = op.getOutBuf();
+
+	hasMode = (response.find("MODE") != std::string::npos);
+	hasKeyMode = (response.find("+") != std::string::npos && response.find("k") != std::string::npos);
+	hasLimitMode = (response.find("l") != std::string::npos);
+
+	std::cout << "  Response: " << response;
+	printTestResult("MODE +kl", hasMode && hasKeyMode && hasLimitMode);
+
+	// Verify both modes set
+	channelHasKey = chan->hasKey();
+	int userLimit3 = chan->getUserLimit();
+	std::cout << "  Channel has key: " << (channelHasKey ? "yes" : "no") << "\n";
+	std::cout << "  User limit: " << userLimit3 << "\n";
+	printTestResult("Both modes applied", channelHasKey && userLimit3 == 100);
+	
+	// Test 22: MODE viewing with modes set
+	std::cout << "\nTest 22: MODE viewing with modes set\n";
+	op.consumeOutBuf(op.getOutBuf().size());
+	
+	handler.handleCommand("MODE #testmodes\r\n", op);
+	response = op.getOutBuf();
+
+	hasChannelModeis = (response.find("324") != std::string::npos);
+	bool showsModes = (response.find("+") != std::string::npos);
+	
+	std::cout << "  Response: " << response;
+	printTestResult("Mode viewing shows modes", hasChannelModeis && showsModes);
+
+	// Test 23: MODE broadcasts to all members
+    std::cout << "\nTest 23: MODE broadcasts to all members\n";
+
+	Client observer(707);
+	observer.setAuthenticated(true);
+	observer.setNickname("observer");
+	observer.setUsername("observer");
+	observer.setRegistered(true);
+		
+	handler.handleCommand("JOIN #testmodes\r\n", observer);
+	observer.consumeOutBuf(observer.getOutBuf().size());
+	op.consumeOutBuf(op.getOutBuf().size());
+
+	handler.handleCommand("MODE #testmodes +i\r\n", op);
+	
+	std::string opOut = op.getOutBuf();
+	std::string observerOut = observer.getOutBuf();
+
+	bool opSeesMode = (opOut.find("MODE") != std::string::npos);
+	bool observerSeesMode = (observerOut.find("MODE") != std::string::npos);
+
+	std::cout << "  Op sees MODE: " << (opSeesMode ? "yes" : "no") << "\n";
+	std::cout << "  Observer sees MODE: " << (observerSeesMode ? "yes" : "no") << "\n";
+	printTestResult("MODE broadcasts", opSeesMode && observerSeesMode);
+
+	// Test 24: MODE with unknown mode character
+	std::cout << "\nTest 24: MODE with unknown mode character\n";
+	op.consumeOutBuf(op.getOutBuf().size());
+	
+	handler.handleCommand("MODE #testmodes +xyz\r\n", op);
+	response = op.getOutBuf();
+
+	hasError = (response.find("472") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_UNKNOWNMODE", hasError);
+
+	std::cout << "=== MODE Command Tests Complete ===\n";
+}
+
 /**
  * @brief Test Registration Flow (PASS -> NICK -> USER)
  */
@@ -1390,7 +1807,8 @@ int main() {
 		// testPartCommand(server, handler);
 		// testKickCommand(server, handler);
 		// testInviteCommand(server, handler);
-		testTopicCommand(server, handler);
+		// testTopicCommand(server, handler);
+		testModeCommand(server, handler);
 		
 		std::cout << "\n======================================\n";
 		std::cout << "          All Tests Completed!         \n";

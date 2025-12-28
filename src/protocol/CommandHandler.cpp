@@ -1523,7 +1523,7 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 	}
 
 	// MODE viewing (no mode string provided)
-	if (msg.params.size() == 1)
+	if (msg.params.size() == 1 && msg.trailing.empty())
 	{
 		// Build current mode string from channel state
 		std::string modes = "+";
