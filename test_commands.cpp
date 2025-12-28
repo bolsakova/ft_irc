@@ -1087,6 +1087,248 @@ void testInviteCommand(Server& server, CommandHandler& handler)
 	std::cout << "=== INVITE Command Tests Complete ===\n";
 }
 
+void testTopicCommand(Server& server, CommandHandler& handler)
+{
+	std::cout << "\n=== Testing TOPIC Command ===\n";
+
+	// Test 1: TOPIC without registration
+	std::cout << "\nTest 1: TOPIC without registration\n";
+	Client unregistered(700);
+	unregistered.setRegistered(false);
+
+	handler.handleCommand("TOPIC #test\r\n", unregistered);
+	std::string response = unregistered.getOutBuf();
+
+	bool hasError = (response.find("451") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NOTREGISTERED", hasError);
+	
+	// Test 2: TOPIC without channel parameter
+	std::cout << "\nTest 2: TOPIC without channel parameter\n";
+
+	Client registered(701);
+	registered.setAuthenticated(true);
+	registered.setNickname("topicuser");
+	registered.setUsername("topicuser");
+	registered.setRegistered(true);
+	
+	handler.handleCommand("TOPIC\r\n", registered);
+	response = registered.getOutBuf();
+
+	hasError = (response.find("461") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NEEDMOREPARAMS", hasError);
+
+	// Test 3: TOPIC for non-existent channel
+	std::cout << "\nTest 3: TOPIC for non-existent channel\n";
+	registered.consumeOutBuf(registered.getOutBuf().size());
+
+	handler.handleCommand("TOPIC #nonexistent\r\n", registered);
+	response = registered.getOutBuf();
+
+	hasError = (response.find("403") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NOSUCHCHANNEL", hasError);
+
+	// Test 4: TOPIC when not on channel
+	std::cout << "\nTest 4: TOPIC when not on channel\n";
+
+	Client creator(702);
+	creator.setAuthenticated(true);
+	creator.setNickname("creator");
+	creator.setUsername("creator");
+	creator.setRegistered(true);
+
+	handler.handleCommand("JOIN #topictest\r\n", creator);
+	creator.consumeOutBuf(creator.getOutBuf().size());
+	
+	Client outsider(703);
+	outsider.setAuthenticated(true);
+	outsider.setNickname("outsider");
+	outsider.setUsername("outsider");
+	outsider.setRegistered(true);
+	
+	handler.handleCommand("TOPIC #topictest\r\n", outsider);
+	response = outsider.getOutBuf();
+
+	hasError = (response.find("442") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_NOTONCHANNEL", hasError);
+	
+	// Test 5: View topic when topic is set
+	std::cout << "\nTest 5: View topic when topic is set\n";
+	
+	Client viewer(704);
+	viewer.setAuthenticated(true);
+	viewer.setNickname("viewer");
+	viewer.setUsername("viewer");
+	viewer.setRegistered(true);
+	
+	handler.handleCommand("JOIN #withtopic\r\n", viewer);
+	Channel* topicChan = server.findChannel("#withtopic");
+	topicChan->setTopic("Welcome to the channel!");
+	
+	viewer.consumeOutBuf(viewer.getOutBuf().size());
+	
+	handler.handleCommand("TOPIC #withtopic\r\n", viewer);
+	response = viewer.getOutBuf();
+	
+	bool hasTopic = (response.find("332") != std::string::npos);
+	bool hasText = (response.find("Welcome to the channel!") != std::string::npos);
+	
+	std::cout << "  Response: " << response;
+	std::cout << "  Has RPL_TOPIC (332): " << (hasTopic ? "yes" : "no") << "\n";
+	std::cout << "  Has topic text: " << (hasText ? "yes" : "no") << "\n";
+	
+	printTestResult("View existing topic", hasTopic && hasText);
+	
+	// Test 6: View topic when no topic is set
+	std::cout << "\nTest 6: View topic when no topic is set\n";
+	
+	Client viewer2(705);
+	viewer2.setAuthenticated(true);
+	viewer2.setNickname("viewer2");
+	viewer2.setUsername("viewer2");
+	viewer2.setRegistered(true);
+	
+	handler.handleCommand("JOIN #notopic\r\n", viewer2);
+	viewer2.consumeOutBuf(viewer2.getOutBuf().size());
+	
+	handler.handleCommand("TOPIC #notopic\r\n", viewer2);
+	response = viewer2.getOutBuf();
+	
+	bool hasNoTopic = (response.find("331") != std::string::npos);
+	
+	std::cout << "  Response: " << response;
+	std::cout << "  Has RPL_TOPIC (331): " << (hasNoTopic ? "yes" : "no") << "\n";
+	printTestResult("View when no topic", hasNoTopic);
+	
+	// Test 7: Set topic (channel without +t)
+	std::cout << "\nTest 8: Set topic (channel without +t)\n";
+	
+	Client setter(706);
+	setter.setAuthenticated(true);
+	setter.setNickname("setter");
+	setter.setUsername("setter");
+	setter.setRegistered(true);
+	
+	handler.handleCommand("JOIN #freetopic\r\n", setter);
+	setter.consumeOutBuf(setter.getOutBuf().size());
+	
+	handler.handleCommand("TOPIC #freetopic :New topic here\r\n", setter);
+	response = setter.getOutBuf();
+	
+	bool hasTopicMsg = (response.find("TOPIC") != std::string::npos);
+	bool hasNewTopic = (response.find("New topic here") != std::string::npos);
+	
+	std::cout << "  Response: " << response;
+	std::cout << "  Has TOPIC message: " << (hasTopicMsg ? "yes" : "no") << "\n";
+	std::cout << "  Has new topic: " << (hasNewTopic ? "yes" : "no") << "\n";
+	
+	printTestResult("Set topic without +t", hasTopicMsg && hasNewTopic);
+	
+	// Verify topic was actually set
+	Channel* freeChan = server.findChannel("#freetopic");
+	bool topicSet = (freeChan && freeChan->getTopic() == "New topic here");
+	std::cout << "  Topic was saved: " << (topicSet ? "yes" : "no") << "\n";
+	printTestResult("Topic saved correctly", topicSet);
+
+	// Test 8: Set topic on +t channel when not operator (should fail)
+	std::cout << "\nTest 8: Set topic on +t channel when not operator\n";
+
+	Client op(707);
+	op.setAuthenticated(true);
+	op.setNickname("op");
+	op.setUsername("op");
+	op.setRegistered(true);
+	
+	Client member(708);
+	member.setAuthenticated(true);
+	member.setNickname("member");
+	member.setUsername("member");
+	member.setRegistered(true);
+
+	handler.handleCommand("JOIN #protected\r\n", op);
+	handler.handleCommand("JOIN #protected\r\n", member);
+	
+	Channel* protectedChan = server.findChannel("#protected");
+	protectedChan->setTopicProtected(true);
+	
+	member.consumeOutBuf(member.getOutBuf().size());
+	
+	handler.handleCommand("TOPIC #protected :Trying to change\r\n", member);
+	response = member.getOutBuf();
+	
+	hasError = (response.find("482") != std::string::npos);
+	std::cout << "  Response: " << response;
+	printTestResult("ERR_CHANOPRIVSNEEDED", hasError);
+	
+	// Test 9: Set topic on +t channel when operator (should succeed)
+	std::cout << "\nTest 9: Set topic on +t channel when operator\n";
+	
+	op.consumeOutBuf(op.getOutBuf().size());
+
+	handler.handleCommand("TOPIC #protected :Official topic\r\n", op);
+	response = op.getOutBuf();
+
+	hasTopicMsg = (response.find("TOPIC") != std::string::npos);
+	hasNewTopic = (response.find("Official topic") != std::string::npos);
+	
+	std::cout << "  Response: " << response;
+	std::cout << "  Has TOPIC message: " << (hasTopicMsg ? "yes" : "no") << "\n";
+	
+	printTestResult("Operator can set topic on +t", hasTopicMsg && hasNewTopic);
+	
+	// Test 10: TOPIC change broadcasts to all members
+	std::cout << "\nTest 10: TOPIC change broadcasts to all members\n";
+
+	Client op2(709);
+	op2.setAuthenticated(true);
+	op2.setNickname("op2");
+	op2.setUsername("op2");
+	op2.setRegistered(true);
+	
+	Client user1(710);
+	user1.setAuthenticated(true);
+	user1.setNickname("user1");
+	user1.setUsername("user1");
+	user1.setRegistered(true);
+
+	Client user2(711);
+	user2.setAuthenticated(true);
+	user2.setNickname("user2");
+	user2.setUsername("user2");
+	user2.setRegistered(true);
+
+	// All join channel
+	handler.handleCommand("JOIN #broadcast\r\n", op2);
+	handler.handleCommand("JOIN #broadcast\r\n", user1);
+	handler.handleCommand("JOIN #broadcast\r\n", user2);
+	
+	op2.consumeOutBuf(op2.getOutBuf().size());
+	user1.consumeOutBuf(user1.getOutBuf().size());
+	user2.consumeOutBuf(user2.getOutBuf().size());
+
+	// Op changes topic
+	handler.handleCommand("TOPIC #broadcast :Broadcast topic\r\n", op2);
+	
+	std::string op2Out = op2.getOutBuf();
+	std::string user1Out = user1.getOutBuf();
+	std::string user2Out = user2.getOutBuf();
+	
+	bool op2SeesTopic = (op2Out.find("TOPIC") != std::string::npos);
+	bool user1SeesTopic = (user1Out.find("TOPIC") != std::string::npos);
+	bool user2SeesTopic = (user2Out.find("TOPIC") != std::string::npos);
+	
+	std::cout << "  Op sees TOPIC: " << (op2SeesTopic ? "yes" : "no") << "\n";
+	std::cout << "  User1 sees TOPIC: " << (user1SeesTopic ? "yes" : "no") << "\n";
+	std::cout << "  User2 sees TOPIC: " << (user2SeesTopic ? "yes" : "no") << "\n";
+
+	printTestResult("TOPIC broadcasts to all members", op2SeesTopic && user1SeesTopic && user2SeesTopic);
+	
+	std::cout << "=== TOPIC Command Tests Complete ===\n";
+}
+
 /**
  * @brief Test Registration Flow (PASS -> NICK -> USER)
  */
@@ -1147,7 +1389,8 @@ int main() {
 		// testJoinCommand(server, handler);
 		// testPartCommand(server, handler);
 		// testKickCommand(server, handler);
-		testInviteCommand(server, handler);
+		// testInviteCommand(server, handler);
+		testTopicCommand(server, handler);
 		
 		std::cout << "\n======================================\n";
 		std::cout << "          All Tests Completed!         \n";
