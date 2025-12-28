@@ -1424,6 +1424,415 @@ void CommandHandler::handleTopic(Client& client, const Message& msg) {
 }
 
 /**
+ * @brief Handle MODE command - view or change channel modes
+ * Format: MODE <channel> [<+/-modes> [parameters...]]
+ * 
+ * @param client Client sending the command
+ * @param msg Parsed message with command and parameters
+ * 
+ * Algorithm:
+ * 		1. Check if client is registered
+ * 		2. Verify channel parameter is provided
+ * 		3. Validate channel exists
+ * 		4. Check if sender is a member of the channel
+ * 		5. If no mode string provided (viewing):
+ * 			- Build current mode string from channel state
+ * 			- Send RPL_CHANNELMODEIS with modes and parameters
+ * 		6. If mode string provided (changing):
+ * 			- Check if sender is operator
+ * 			- Parse mode string character by character
+ * 			- Track +/- action state
+ * 			- Apply each mode (i, t, k, o, l)
+ * 			- Consume parameters for +k, +o, -o, +l
+ * 			- Build applied mode string
+ * 			- Broadcast MODE change to all members
+ * 
+ * Supported modes:
+ * 		+i/-i: Invite-only channel
+ * 		+t/-t: Topic protection (only ops can change)
+ * 		+k/-k: Channel key/password (+k <key>)
+ * 		+o/-o: Grant/revoke operator privileges (+o/-o <nickname>)
+ * 		+l/-l: User limit (+l <number>)
+ * 
+ * Responses:
+ * 		- ERR_NOTREGISTERED (451): Client not registered
+ * 		- ERR_NEEDMOREPARAMS (461): Missing channel parameter or mode parameters
+ * 		- ERR_NOSUCHCHANNEL (403): Channel doesn't exist
+ * 		- ERR_NOTONCHANNEL (442): Sender is not on that channel
+ * 		- ERR_CHANOPRIVSNEEDED (482): Need operator privileges to change modes
+ * 		- ERR_USERNOTINCHANNEL (441): Target user not on channel (for +o/-o)
+ * 		- ERR_UNKNOWNMODE (472): Unknown mode character
+ * 		- RPL_CHANNELMODEIS (324): Current channel modes (viewing)
+ * 		- Success: :nick!user@host MODE #channel +modes [params]
+ */
+void CommandHandler::handleMode(Client& client, const Message& msg) {
+	// Check if client is registered
+	if (!client.isRegistered())
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOTREGISTERED,
+			client.getNickname().empty() ? "*" : client.getNickname(),
+			"",
+			"You have not registered"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Check if channel parameter is provided
+	if (msg.params.empty())
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NEEDMOREPARAMS,
+			client.getNickname(),
+			"MODE",
+			"Not enough parameters"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	std::string channel_name = msg.params[0];
+
+	// Validate channel exists
+	Channel* chan = m_server.findChannel(channel_name);
+	if (!chan)
+	{
+		// Channel doesn't exist
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOSUCHCHANNEL,
+			client.getNickname(),
+			channel_name,
+			"No such channel"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Check if sender is a member of the channel
+	if (!chan->isMember(client.getFD()))
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOTONCHANNEL,
+			client.getNickname(),
+			channel_name,
+			"You're not on that channel"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// MODE viewing (no mode string provided)
+	if (msg.params.size() == 1)
+	{
+		// Build current mode string from channel state
+		std::string modes = "+";
+		std::string mode_params;
+
+		if (chan->isInviteOnly())
+			modes += 'i';
+		if (chan->isTopicProtected())
+			modes += 't';
+		if (chan->hasKey())
+		{
+			modes += 'k';
+			mode_params += " " + chan->getKey();
+		}
+		if (chan->getUserLimit() > 0)
+		{
+			modes += 'l';
+			mode_params += " ";
+
+			// Convert int to string manually
+			std::ostringstream oss;
+			oss << chan->getUserLimit();
+			mode_params += oss.str();
+		}
+
+		// If no modes set, just send "+"
+		if (modes == "+")
+			modes = "+";
+		
+		// Send RPL_CHANNELMODEIS (324)
+		std::string reply = ":" + m_server_name + " 324 " +
+							client.getNickname() + " " +
+							channel_name + " " + modes + mode_params + "\r\n";
+		sendReply(client, reply);
+		return;
+	}
+
+	// MODE changing (mode string provided)
+	// Check if sender is operator
+	if (!chan->isOperator(client.getFD()))
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_CHANOPRIVSNEEDED,
+			client.getNickname(),
+			channel_name,
+			"You're not channel operator"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	std::string mode_string = msg.params[1];
+	char action = '+';		// Current action (+ or -)
+	size_t param_index = 2;	// Start at msg.params[2] for mode parameters
+	
+	std::string applied_modes;					// Track applied mode changes
+	std::vector<std::string> applied_params;	// Track parameters for applied modes
+	char current_action = '\0';					// Track last added action to applied_modes
+
+	// Parse mode string character by character
+	for (size_t i = 0; i < mode_string.length(); ++i)
+	{
+		char c = mode_string[i];
+
+		// Handle action switches
+		if (c == '+' || c == '-')
+		{
+			action = c;
+			continue;
+		}
+
+		// Process mode character
+		switch (c)
+		{
+			case 'i':
+			{
+				// Invite-only mode
+				if (action == '+')
+					chan->setInviteOnly(true);
+				else
+					chan->setInviteOnly(false);
+				
+				// Add to applied modes string
+				if (current_action != action)
+				{
+					applied_modes += action;
+					current_action = action;
+				}
+				applied_modes += 'i';
+				break;
+			}
+			case 't':
+			{
+				// Topic protection mode
+				if (action == '+')
+					chan->setTopicProtected(true);
+				else
+					chan->setTopicProtected(false);
+				
+				// Add to applied modes string
+				if (current_action != action)
+				{
+					applied_modes += action;
+					current_action = action;
+				}
+				applied_modes += 't';
+				break;
+			}
+			case 'k':
+			{
+				// Channel key mode
+				if (action == '+')
+				{
+					// Need key parameter
+					if (param_index >= msg.params.size())
+					{
+						std::string error = MessageBuilder::buildErrorReply(
+							m_server_name, ERR_NEEDMOREPARAMS,
+							client.getNickname(),
+							"MODE",
+							"Not enough parameters"
+						);
+						sendReply(client, error);
+						continue;
+					}
+					std::string key = msg.params[param_index++];
+					chan->setKey(key);
+
+					// Add to applied modes string
+					if (current_action != action)
+					{
+						applied_modes += action;
+						current_action = action;
+					}
+					applied_modes += 'k';
+					applied_params.push_back(key);
+				}
+				else
+				{
+					// Remove key
+					chan->removeKey();
+
+					// Add to applied modes string
+					if (current_action != action)
+					{
+						applied_modes += action;
+						current_action = action;
+					}
+					applied_modes += 'k';
+				}
+				break;
+			}
+			case 'o':
+			{
+				// Operator privileges mode
+				// Need nickname parameter for both + and -
+				if (param_index >= msg.params.size())
+				{
+					std::string error = MessageBuilder::buildErrorReply(
+						m_server_name, ERR_NEEDMOREPARAMS,
+						client.getNickname(),
+						"MODE",
+						"Not enough parameters"
+					);
+					sendReply(client, error);
+					continue;
+				}
+				
+				std::string target_nick = msg.params[param_index++];
+				
+				// Find target user by nickname
+				Client* target = m_server.findClientByNickname(target_nick);
+				if (!target)
+				{
+					std::string error = MessageBuilder::buildErrorReply(
+						m_server_name, ERR_NOSUCHNICK,
+						client.getNickname(),
+						target_nick,
+						"No such nick/channel"
+					);
+					sendReply(client, error);
+					continue;
+
+				}
+
+				// Check if target is on the channel
+				if (!chan->isMember(target->getFD()))
+				{
+					std::string error = MessageBuilder::buildErrorReply(
+						m_server_name, ERR_USERNOTINCHANNEL,
+						client.getNickname(),
+						target_nick + " " + channel_name,
+						"They aren't on that channel"
+					);
+					sendReply(client, error);
+					return;
+				}
+
+				// Apply operator change
+				if (action == '+')
+					chan->addOperator(target->getFD());
+				else
+					chan->removeOperator(target->getFD());
+				
+				// Add to applied modes string
+				if (current_action != action)
+				{
+					applied_modes += action;
+					current_action = action;
+				}
+				applied_modes += 'o';
+				applied_params.push_back(target_nick);
+				break;
+			}
+			case 'l':
+			{
+				// User limit mode
+				if (action == '+')
+				{
+					// Need limit parameter
+					if (param_index >= msg.params.size())
+					{
+						std::string error = MessageBuilder::buildErrorReply(
+							m_server_name, ERR_NEEDMOREPARAMS,
+							client.getNickname(),
+							"MODE",
+							"Not enough parameters"
+						);
+						sendReply(client, error);
+						continue;
+					}
+
+					std::string limit_str = msg.params[param_index++];
+
+					// Convert string to int
+					int limit = 0;
+					std::istringstream iss(limit_str);
+					if (!(iss >> limit) || limit <= 0)
+					{
+						// Invalid limit - ignore
+						continue;
+					}
+
+					chan->setUserLimit(limit);
+
+					// Add to applied modes string
+					if (current_action != action)
+					{
+						applied_modes += action;
+						current_action = action;
+					}
+					applied_modes += 'l';
+					applied_params.push_back(limit_str);
+				}
+				else
+				{
+					// Remove limit
+					chan->setUserLimit(0);
+
+					// Add to applied modes string
+					if (current_action != action)
+					{
+						applied_modes += action;
+						current_action = action;
+					}
+					applied_modes += 'l';
+				}
+				break;
+			}
+			
+			default:
+			{
+				// Unknown mode - send error
+				std::string unknown_mode(1, c);
+				std::string error = MessageBuilder::buildErrorReply(
+					m_server_name, ERR_UNKNOWNMODE,
+					client.getNickname(),
+					unknown_mode,
+					"is unknown mode char to me"
+				);
+				sendReply(client, error);
+				break;
+			}
+		}
+	}
+	
+	// If any modes were applied, broadcast the change
+	if (!applied_modes.empty())
+	{
+		std::string prefix = client.getNickname() + "!" +
+							client.getUsername() + "@localhost";
+		std::vector<std::string> params;
+		params.push_back(channel_name);
+		params.push_back(applied_modes);
+
+		// Add mode parameters
+		for (size_t i = 0; i < applied_params.size(); ++i)
+			params.push_back(applied_params[i]);
+		
+		std::string mode_msg = MessageBuilder::buildCommandMessage(
+			prefix, "MODE", params, ""
+		);
+		
+		// Broadcast to all channel members (including sender)
+		chan->broadcast(mode_msg);
+	}
+}
+
+/**
  * @brief Main command dispatcher - routes commands to appropriate handlers.
  * 
  * @param raw_command Complete IRC command with \r\n
@@ -1469,6 +1878,8 @@ void CommandHandler::handleCommand(const std::string& raw_command, Client& clien
 			handleInvite(client, msg);
 		else if (msg.command == "TOPIC")
 			handleTopic(client, msg);
+		else if (msg.command == "MODE")
+			handleMode(client, msg);
 		else {
 			// Command not recognized or not implemented
 			std::string error = MessageBuilder::buildErrorReply(
