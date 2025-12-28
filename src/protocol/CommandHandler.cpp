@@ -1278,6 +1278,152 @@ void CommandHandler::handleInvite(Client& client, const Message& msg) {
 }
 
 /**
+ * @brief Handle TOPIC command - view or change channel topic
+ * Format: TOPIC <channel> [:<new topic>]
+ * 
+ * @param client Client sending the command
+ * @param msg  Parsed message with command and parameters
+ * 
+ * Algorithm:
+ * 		1. Check if client is registered
+ * 		2. Verify channel parameter is provided
+ * 		3. Validate channel exists
+ * 		4. Check if sender is a member of the channel
+ * 		5. If no new topic provided:
+ * 			- Send current topic (RPL_TOPIC) or RPL_NOTOPIC
+ * 		6. If new topic provided:
+ * 			- Check if channel is +t (topic protected)
+ * 			- If +t, verify sender is operator
+ * 			- Set new topic
+ * 			- Broadcast TOPIC change to all members
+ * 
+ * Responses:
+ * 		- ERR_NEEDMOREPARAMS (461): No channel specified
+ * 		- ERR_NOSUCHCHANNEL (403): Channel doesn't exist
+ * 		- ERR_NOTONCHANNEL (442): Sender is not on that channel
+ * 		- ERR_CHANOPRIVSNEEDED (482): Need operator privileges (for +t channels)
+ * 		- RPL_TOPIC (332): Current topic
+ * 		- RPL_NOTOPIC (331): No topic set
+ * 		- Success: :nick!user@host TOPIC #channel :new topic
+ */
+void CommandHandler::handleTopic(Client& client, const Message& msg) {
+	// Check if client is registered
+	if (!client.isRegistered())
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOTREGISTERED,
+			"*", "",
+			"You have not registered"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Check if channel parameter is provided
+	if (msg.params.empty())
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NEEDMOREPARAMS,
+			client.getNickname(),
+			"TOPIC",
+			"Not enough parameters"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	std::string channel_name = msg.params[0];
+
+	// Find the channel
+	Channel* chan = m_server.findChannel(channel_name);
+
+	if (!chan)
+	{
+		// Channel doesn't exist
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOSUCHCHANNEL,
+			client.getNickname(),
+			channel_name,
+			"No such channel"
+		);
+		sendReply(client, error);
+		return;
+	}
+
+	// Check if client is a member of the channel
+	if (!chan->isMember(client.getFD()))
+	{
+		std::string error = MessageBuilder::buildErrorReply(
+			m_server_name, ERR_NOTONCHANNEL,
+			client.getNickname(),
+			channel_name,
+			"You're not on that channel"
+		);
+		sendReply(client, error);
+		return;
+	}
+	
+	// Check if this is a query (view topic) or set (change topic)
+	if (msg.trailing.empty())
+	{
+		// Query - show current topic
+		if (chan->hasTopic())
+		{
+			// RPL_TOPIC (332)
+			std::string topic_reply = ":" + m_server_name + " 332 " +
+			client.getNickname() + " " +
+			channel_name + " :" + chan->getTopic() + "\r\n";
+			sendReply(client, topic_reply);
+		}
+		else
+		{
+			// RPL_NOTOPIC (331)
+			std::string no_topic = MessageBuilder::buildNumericReply(
+				m_server_name, RPL_NOTOPIC, client.getNickname(),
+				channel_name + " :No topic is set"
+			);
+			sendReply(client, no_topic);
+		}
+	}
+	else
+	{
+		// Check if channel is +t (topic protected)
+		if (chan->isTopicProtected() && !chan->isOperator(client.getFD()))
+		{
+			std::string error = MessageBuilder::buildErrorReply(
+				m_server_name, ERR_CHANOPRIVSNEEDED,
+				client.getNickname(),
+				channel_name,
+				"You're not channel operator"
+			);
+			sendReply(client, error);
+			return;
+		}
+
+		// Set the new topic
+		std::string new_topic = msg.trailing;
+		chan->setTopic(new_topic);
+
+		// Build TOPIC message
+		// Format: :nick!user@host TOPIC #channel :new topic
+		std::string prefix = client.getNickname() + "!" +
+							client.getUsername() + "@localhost";
+		std::vector<std::string> params;
+		params.push_back(channel_name);
+		
+		std::string topic_msg = MessageBuilder::buildCommandMessage(
+			prefix, "TOPIC", params, new_topic
+		);
+
+		// Broadcast TOPIC change to all channel members
+		chan->broadcast(topic_msg);
+
+		std::cout << client.getNickname() << " set topic for "
+					<< channel_name << ": " << new_topic << "\n";
+	}
+}
+
+/**
  * @brief Main command dispatcher - routes commands to appropriate handlers.
  * 
  * @param raw_command Complete IRC command with \r\n
@@ -1321,6 +1467,8 @@ void CommandHandler::handleCommand(const std::string& raw_command, Client& clien
 			handleKick(client, msg);
 		else if (msg.command == "INVITE")
 			handleInvite(client, msg);
+		else if (msg.command == "TOPIC")
+			handleTopic(client, msg);
 		else {
 			// Command not recognized or not implemented
 			std::string error = MessageBuilder::buildErrorReply(
