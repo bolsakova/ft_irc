@@ -41,8 +41,10 @@ class CommandHandler {
 			bool	isValidNickname(const std::string& nickname);
 			bool	isValidChannelName(const std::string& name);
 
-			void sendWelcome(Client& client);							// Send welcome messages (001-004) to newly registered client
-			void sendReply(Client& client, const std::string& reply);	// Append reply to client's output buffer
+			void sendWelcome(Client& client);
+			void sendReply(Client& client, const std::string& reply);
+			void sendError(Client& client, int error_code, const std::string& param, const std::string& message);
+			void sendNumeric(Client& client, int numeric_code, const std::string& message);
 
 	public:
 			CommandHandler(Server& server, const std::string& password);	// Constructor for command handler
