@@ -30,21 +30,6 @@ CommandHandler::CommandHandler(Server& server, const std::string& password)
 }
 
 /**
- * @brief Helper function to append a reply to client's output buffer.
- * The server's send loop will transmit it when socket is ready.
- * 
- * @param client Client to send reply to
- * @param reply Formatted IRC message (must end with \r\n)
- * 
- * Algorithm:
- * 			1. Call client.appendToOutBuf() to add reply to output queue
- * 			2. Server's poll() loop will detect POLLOUT and call sendData()
- */
-void CommandHandler::sendReply(Client& client, const std::string& reply) {
-	client.appendToOutBuf(reply);
-}
-
-/**
  * Validate nickname according to RFC 1459 rules.
  * 
  * @param nickname Nickname string to validate
@@ -149,33 +134,52 @@ bool CommandHandler::isValidChannelName(const std::string& name) {
  */
 void CommandHandler::sendWelcome(Client& client) {
 	// RPL_WELCOME (001): Welcome message with full client identifier
-	std::string reply001 = MessageBuilder::buildNumericReply(
-		m_server_name, RPL_WELCOME, client.getNickname(),
+	sendNumeric(client, RPL_WELCOME,
 		"Welcome to the Internet Relay Network " + client.getNickname() + "!" +
 		client.getUsername() + "@localhost"
 	);
-	sendReply(client, reply001);
-
+	
 	// RPL_YOURHOST (002): Server information
-	std::string reply002 = MessageBuilder::buildNumericReply(
-		m_server_name, RPL_YOURHOST, client.getNickname(),
-		"Your host is " + m_server_name + ", running version 1.0"
-	);
-	sendReply(client, reply002);
-
+	sendNumeric(client, RPL_YOURHOST,
+		"Your host is " + m_server_name + ", running version 1.0");
+		
 	// RPL_CREATED (003): Server creation date
-	std::string reply003 = MessageBuilder::buildNumericReply(
-		m_server_name, RPL_CREATED, client.getNickname(),
-		"This server was created 2025-12-21"
-	);
-	sendReply(client, reply003)
-	;
+	sendNumeric(client, RPL_CREATED,
+		"This server was created 2025-12-21");
+		
 	// RPL_MYINFO (004): Server name, version, and available modes
-	std::string reply004 = MessageBuilder::buildNumericReply(
-		m_server_name, RPL_MYINFO, client.getNickname(),
-		m_server_name + " 1.0 o o"
+	sendNumeric(client, RPL_MYINFO,
+		m_server_name + " 1.0 o o");
+}
+
+/**
+ * @brief Helper function to append a reply to client's output buffer.
+ * The server's send loop will transmit it when socket is ready.
+ * 
+ * @param client Client to send reply to
+ * @param reply Formatted IRC message (must end with \r\n)
+ * 
+ * Algorithm:
+ * 			1. Call client.appendToOutBuf() to add reply to output queue
+ * 			2. Server's poll() loop will detect POLLOUT and call sendData()
+ */
+void CommandHandler::sendReply(Client& client, const std::string& reply) {
+	client.appendToOutBuf(reply);
+}
+
+void CommandHandler::sendError(Client& client, int error_code, const std::string& param, const std::string& message) {
+	std::string target = client.getNickname().empty() ? "*" : client.getNickname();
+	std::string error = MessageBuilder::buildErrorReply(
+		m_server_name, error_code, target, param, message
 	);
-	sendReply(client, reply004);
+	sendReply(client, error);
+}
+
+void CommandHandler::sendNumeric(Client& client, int numeric_code, const std::string& message) {
+	std::string reply = MessageBuilder::buildNumericReply(
+		m_server_name, numeric_code, client.getNickname(), message
+	);
+	sendReply(client, reply);
 }
 
 /**
@@ -185,21 +189,13 @@ void CommandHandler::sendWelcome(Client& client) {
 void CommandHandler::handlePass(Client& client, const Message& msg) {
 	// Check if client already completed registration
 	if (client.isRegistered()) {
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_ALREADYREGISTERED, client.getNickname(), "",
-			"You may not reregister"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_ALREADYREGISTERED, "", "You may not reregister");
 		return;
 	}
 
 	// Check if password parameter was provided
 	if (msg.params.empty() && msg.trailing.empty()) {
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NEEDMOREPARAMS, "*", "PASS",
-			"Not enough parameters"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NEEDMOREPARAMS, "PASS", "Not enough parameters");
 		return;
 	}
 
@@ -211,11 +207,7 @@ void CommandHandler::handlePass(Client& client, const Message& msg) {
 		client.setAuthenticated(true);
 		std::cout << "Client fd " << client.getFD() << " authenticated successfully\n";
 	} else {
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_PASSWDMISMATCH, "*", "",
-			"Password incorrect"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_PASSWDMISMATCH, "", "Password incorrect");
 		std::cout << "Client fd " << client.getFD() << " authentication failed\n";
 	}
 }
@@ -227,11 +219,7 @@ void CommandHandler::handlePass(Client& client, const Message& msg) {
 void CommandHandler::handleNick(Client& client, const Message& msg) {
 	// Check if nickname parameter was provided
 	if (msg.params.empty() && msg.trailing.empty()) {
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NONICKNAMEGIVEN, "*", "",
-			"No nickname given"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NONICKNAMEGIVEN, "", "No nickname given");
 		return;
 	}
 
@@ -240,21 +228,13 @@ void CommandHandler::handleNick(Client& client, const Message& msg) {
 
 	// Validate nickname according to RFC 1459 rules
 	if (!isValidNickname(new_nick)) {
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_ERRONEOUSNICKNAME, "*", new_nick,
-			"Erroneous nickname"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_ERRONEOUSNICKNAME, new_nick, "Erroneous nickname");
 		return;
 	}
 
 	// Check if nickname is already taken by another client
 	if (isNicknameInUse(new_nick, client.getFD())) {
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NICKNAMEINUSE, "*", new_nick,
-			"Nickname is already in use"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NICKNAMEINUSE, new_nick, "Nickname is already in use");
 		return;
 	}
 
@@ -290,11 +270,7 @@ void CommandHandler::handleNick(Client& client, const Message& msg) {
 void CommandHandler::handleUser(Client& client, const Message& msg) {
 	// Check if client already completed registration
 	if (client.isRegistered()) {
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_ALREADYREGISTERED, client.getNickname(), "",
-			"You may not reregister"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_ALREADYREGISTERED, "", "You may not reregister");
 		return;
 	}
 
@@ -303,11 +279,7 @@ void CommandHandler::handleUser(Client& client, const Message& msg) {
 	// We need at least 3 parameters + trailing
 	if (msg.params.size() < 3 || msg.trailing.empty())
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NEEDMOREPARAMS, "*", "USER",
-			"Not enough parameters"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NEEDMOREPARAMS, "USER", "Not enough parameters");
 		return;
 	}
 
@@ -339,13 +311,7 @@ void CommandHandler::handlePing(Client& client, const Message& msg)
 {
 	// Check if client is registered (must complete PASS/NICK/USER first)
 	if (!client.isRegistered()) {
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOTREGISTERED,
-			client.getNickname().empty() ? "*" : client.getNickname(),
-			"",
-			"You have not registered"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOTREGISTERED, "", "You have not registered");
 		return;
 	}
 
@@ -373,7 +339,7 @@ void CommandHandler::handlePing(Client& client, const Message& msg)
 }
 
 /**
- * @brief Handle QUIT command - disconnect cliet from server.
+ * Handle QUIT command - disconnect cliet from server.
  * Format: QUIT [:<reason>]
  */
 void CommandHandler::handleQuit(Client& client, const Message& msg)
@@ -423,39 +389,21 @@ void CommandHandler::handlePrivmsg(Client& client, const Message& msg)
 {
 	// Check if client registered
 	if (!client.isRegistered()) {
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOTREGISTERED,
-			client.getNickname().empty() ? "*" : client.getNickname(),
-			"",
-			"You have not registered"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOTREGISTERED, "", "You have not registered");
 		return;
 	}
 
 	// Check if target parameter was provided
 	if (msg.params.empty())
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NORECIPIENT,
-			client.getNickname(),
-			"",
-			"No recipient given (PRIVMSG)"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NORECIPIENT, "", "No recipient given (PRIVMSG)");
 		return;
 	}
 
 	// Check if message text was provided
 	if (msg.trailing.empty())
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOTEXTTOSEND,
-			client.getNickname(),
-			"",
-			"No text to send"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOTEXTTOSEND, "", "No text to send");
 		return;
 	}
 
@@ -471,26 +419,14 @@ void CommandHandler::handlePrivmsg(Client& client, const Message& msg)
 		if (!chan)
 		{
 			// Channel doesn't exist
-			std::string error = MessageBuilder::buildErrorReply(
-				m_server_name, ERR_NOSUCHCHANNEL,
-				client.getNickname(),
-				target,
-				"No such channel"
-			);
-			sendReply(client, error);
+			sendError(client, ERR_NOSUCHCHANNEL, target, "No such channel");
 			return;
 		}
 
 		// Check if sender is a member of the channel
 		if (!chan->isMember(client.getFD()))
 		{
-			std::string error = MessageBuilder::buildErrorReply(
-				m_server_name, ERR_CANNOTSENDTOCHAN,
-				client.getNickname(),
-				target,
-				"Cannot send to channel"
-			);
-			sendReply(client, error);
+			sendError(client, ERR_CANNOTSENDTOCHAN, target, "Cannot send to channel");
 			return;
 		}
 
@@ -530,13 +466,7 @@ void CommandHandler::handlePrivmsg(Client& client, const Message& msg)
 		// Check if target user exists
 		if (!target_client)
 		{
-			std::string error = MessageBuilder::buildErrorReply(
-				m_server_name, ERR_NOSUCHNICK,
-				client.getNickname(),
-				target,
-				"No such nick/channel"
-			);
-			sendReply(client, error);
+			sendError(client, ERR_NOSUCHNICK, target, "No such nick/channel");
 			return;
 		}
 
@@ -567,26 +497,14 @@ void CommandHandler::handlePrivmsg(Client& client, const Message& msg)
 void CommandHandler::handleJoin(Client& client, const Message& msg) {
 	// Check if client is registered
 	if (!client.isRegistered()) {
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOTREGISTERED,
-			client.getNickname().empty() ? "*" : client.getNickname(),
-			"",
-			"You have not registered"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOTREGISTERED, "", "You have not registered");
 		return;
 	}
 
 	// Check if channel parameter was provided
 	if (msg.params.empty())
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NEEDMOREPARAMS,
-			client.getNickname(),
-			"JOIN",
-			"Not enough parameters"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NEEDMOREPARAMS, "JOIN", "Not enough parameters");
 		return;
 	}
 
@@ -595,13 +513,7 @@ void CommandHandler::handleJoin(Client& client, const Message& msg) {
 
 	// Validate channel name
 	if (!isValidChannelName(channel_name)) {
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOSUCHCHANNEL,
-			client.getNickname(),
-			channel_name,
-			"Invalid channel name"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOSUCHCHANNEL, channel_name, "Invalid channel name");
 		return;
 	}
 
@@ -625,13 +537,7 @@ void CommandHandler::handleJoin(Client& client, const Message& msg) {
 		{
 			if (!chan->isInvited(client.getFD()))
 			{
-				std::string error = MessageBuilder::buildErrorReply(
-					m_server_name, ERR_INVITEONLYCHAN,
-					client.getNickname(),
-					channel_name,
-					"Cannot join channel (+i)"
-				);
-				sendReply(client, error);
+				sendError(client, ERR_INVITEONLYCHAN, channel_name, "Cannot join channel (+i)");
 				return;
 			}
 			// Remove from invited list after successful join
@@ -643,13 +549,7 @@ void CommandHandler::handleJoin(Client& client, const Message& msg) {
 		{
 			if (key != chan->getKey())
 			{
-				std::string error = MessageBuilder::buildErrorReply(
-					m_server_name, ERR_BADCHANNELKEY,
-					client.getNickname(),
-					channel_name,
-					"Cannot join channel (+k)"
-				);
-				sendReply(client, error);
+				sendError(client, ERR_BADCHANNELKEY, channel_name, "Cannot join channel (+k)");
 				return;
 			}
 		}
@@ -658,13 +558,7 @@ void CommandHandler::handleJoin(Client& client, const Message& msg) {
 		int limit = chan->getUserLimit();
 		if (limit > 0 && static_cast<int>(chan->getMembers().size()) >= limit)
 		{
-			std::string error = MessageBuilder::buildErrorReply(
-				m_server_name, ERR_CHANNELISFULL,
-				client.getNickname(),
-				channel_name,
-				"Cannot join channel (+l)"
-			);
-			sendReply(client, error);
+			sendError(client, ERR_CHANNELISFULL, channel_name, "Cannot join channel (+l)");
 			return;
 		}
 	}
@@ -711,11 +605,7 @@ void CommandHandler::handleJoin(Client& client, const Message& msg) {
 	sendReply(client, names_reply);
 
 	// RPL_ENDOFNAMES (366): :server 366 nick #channel :End of /NAMES list
-	std::string end_names = MessageBuilder::buildNumericReply(
-		m_server_name, RPL_ENDOFNAMES, client.getNickname(),
-		channel_name + " :End of /NAMES list"
-	);
-	sendReply(client, end_names);
+	sendNumeric(client, RPL_ENDOFNAMES, channel_name + " :End of /NAMES list");
 
 	// Send TOPIC if set
 	if (chan->hasTopic())
@@ -727,14 +617,7 @@ void CommandHandler::handleJoin(Client& client, const Message& msg) {
 		sendReply(client, topic_reply);
 	}
 	else
-	{
-		// RPL_NOTOPIC (331)
-		std::string no_topic = MessageBuilder::buildNumericReply(
-			m_server_name, RPL_NOTOPIC, client.getNickname(),
-			channel_name + " :No topic is set"
-		);
-		sendReply(client, no_topic);
-	}
+		sendNumeric(client, RPL_NOTOPIC, channel_name + " :No topic is set");
 }
 
 /**
@@ -745,25 +628,14 @@ void CommandHandler::handlePart(Client& client, const Message& msg) {
 	// Check if client is registered
 	if (!client.isRegistered())
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOTREGISTERED,
-			"*", "",
-			"You have not registered"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOTREGISTERED, "", "You have not registered");
 		return;
 	}
 
 	// Check if channel parameter is provided
 	if (msg.params.empty())
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NEEDMOREPARAMS,
-			client.getNickname(),
-			"PART",
-			"Not enough parameters"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NEEDMOREPARAMS, "PART", "Not enough parameters");
 		return;
 	}
 
@@ -775,26 +647,14 @@ void CommandHandler::handlePart(Client& client, const Message& msg) {
 
 	if (!chan)
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOSUCHCHANNEL,
-			client.getNickname(),
-			channel_name,
-			"No such channel"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOSUCHCHANNEL, channel_name, "No such channel");
 		return;
 	}
 
 	// Check if client is a member of the channel
 	if (!chan->isMember(client.getFD()))
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOTONCHANNEL,
-			client.getNickname(),
-			channel_name,
-			"You're not on that channel"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOTONCHANNEL, channel_name, "You're not on that channel");
 		return;
 	}
 
@@ -829,25 +689,14 @@ void CommandHandler::handleKick(Client& client, const Message& msg) {
 	// Check if client is registered
 	if (!client.isRegistered())
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOTREGISTERED,
-			"*", "",
-			"You have not registered"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOTREGISTERED, "", "You have not registered");
 		return;
 	}
 
 	// Check if both channel and user parameters are provided
 	if (msg.params.size() < 2)
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NEEDMOREPARAMS,
-			client.getNickname(),
-			"KICK",
-			"Not enough parameters"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NEEDMOREPARAMS, "KICK", "Not enough parameters");
 		return;
 	}
 
@@ -861,39 +710,21 @@ void CommandHandler::handleKick(Client& client, const Message& msg) {
 	if (!chan)
 	{
 		// Channel doesn't exist
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOSUCHCHANNEL,
-			client.getNickname(),
-			channel_name,
-			"No such channel"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOSUCHCHANNEL, channel_name, "No such channel");
 		return;
 	}
 
 	// Check if sender is a member of the channel
 	if (!chan->isMember(client.getFD()))
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOTONCHANNEL,
-			client.getNickname(),
-			channel_name,
-			"You're not on that channel"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOTONCHANNEL, channel_name, "You're not on that channel");
 		return;
 	}
 
 	// Check if sender is a channel operator
 	if (!chan->isOperator(client.getFD()))
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_CHANOPRIVSNEEDED,
-			client.getNickname(),
-			channel_name,
-			"You're not channel operator"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_CHANOPRIVSNEEDED, channel_name, "You're not channel operator");
 		return;
 	}
 
@@ -916,13 +747,7 @@ void CommandHandler::handleKick(Client& client, const Message& msg) {
 	// Check if target exists and is on the channel
 	if (!target_client || !chan->isMember(target_fd))
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_USERNOTINCHANNEL,
-			client.getNickname(),
-			target_nick + " " + channel_name,
-			"They aren't on that channel"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_USERNOTINCHANNEL, target_nick + " " + channel_name, "They aren't on that channel");
 		return;
 	}
 
@@ -956,25 +781,14 @@ void CommandHandler::handleInvite(Client& client, const Message& msg) {
 	// Check if client is registered
 	if (!client.isRegistered())
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOTREGISTERED,
-			"*", "",
-			"You have not registered"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOTREGISTERED, "", "You have not registered");
 		return;
 	}
 
 	// Check if both channel and nickname parameters are provided
 	if (msg.params.size() < 2)
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NEEDMOREPARAMS,
-			client.getNickname(),
-			"INVITE",
-			"Not enough parameters"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NEEDMOREPARAMS, "INVITE", "Not enough parameters");
 		return;
 	}
 
@@ -987,39 +801,21 @@ void CommandHandler::handleInvite(Client& client, const Message& msg) {
 	if (!chan)
 	{
 		// Channel doesn't exist
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOSUCHCHANNEL,
-			client.getNickname(),
-			channel_name,
-			"No such channel"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOSUCHCHANNEL, channel_name, "No such channel");
 		return;
 	}
 
 	// Check if sender is a member of the channel
 	if (!chan->isMember(client.getFD()))
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOTONCHANNEL,
-			client.getNickname(),
-			channel_name,
-			"You're not on that channel"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOTONCHANNEL, channel_name, "You're not on that channel");
 		return;
 	}
 
 	// Check if sender is operator (required for +i channels)
 	if (chan->isInviteOnly() && !chan->isOperator(client.getFD()))
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_CHANOPRIVSNEEDED,
-			client.getNickname(),
-			channel_name,
-			"You're not channel operator"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_CHANOPRIVSNEEDED, channel_name, "You're not channel operator");
 		return;
 	}
 
@@ -1050,26 +846,14 @@ void CommandHandler::handleInvite(Client& client, const Message& msg) {
 	// Check if target user exists
 	if (!target_client)
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOSUCHNICK,
-			client.getNickname(),
-			target_nick,
-			"no such nick/channel"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOSUCHNICK, target_nick, "No such nick/channel");
 		return;
 	}
 
 	// Check if target is already on the channel
 	if (chan->isMember(target_fd))
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_USERONCHANNEL,
-			client.getNickname(),
-			target_nick + " " + channel_name,
-			"is already on channel"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_USERONCHANNEL, target_nick + " " + channel_name, "is already on channel");
 		return;
 	}
 
@@ -1092,11 +876,7 @@ void CommandHandler::handleInvite(Client& client, const Message& msg) {
 	
 	// Send RPL_INVITING (341) to sender
     // Format: :server 341 sender target #channel
-	std::string inviting_reply = MessageBuilder::buildNumericReply(
-		m_server_name, RPL_INVITING, client.getNickname(),
-		target_nick + " " + channel_name
-	);
-	sendReply(client, inviting_reply);
+	sendNumeric(client, RPL_INVITING, target_nick + " " + channel_name);
 
 	std::cout << client.getNickname() << " invited " << target_nick
 				<< " to " << channel_name << "\n";
@@ -1110,25 +890,14 @@ void CommandHandler::handleTopic(Client& client, const Message& msg) {
 	// Check if client is registered
 	if (!client.isRegistered())
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOTREGISTERED,
-			"*", "",
-			"You have not registered"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOTREGISTERED, "", "You have not registered");
 		return;
 	}
 
 	// Check if channel parameter is provided
 	if (msg.params.empty())
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NEEDMOREPARAMS,
-			client.getNickname(),
-			"TOPIC",
-			"Not enough parameters"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NEEDMOREPARAMS, "TOPIC", "Not enough parameters");
 		return;
 	}
 
@@ -1140,26 +909,14 @@ void CommandHandler::handleTopic(Client& client, const Message& msg) {
 	if (!chan)
 	{
 		// Channel doesn't exist
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOSUCHCHANNEL,
-			client.getNickname(),
-			channel_name,
-			"No such channel"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOSUCHCHANNEL, channel_name, "No such channel");
 		return;
 	}
 
 	// Check if client is a member of the channel
 	if (!chan->isMember(client.getFD()))
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOTONCHANNEL,
-			client.getNickname(),
-			channel_name,
-			"You're not on that channel"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOTONCHANNEL, channel_name, "You're not on that channel");
 		return;
 	}
 	
@@ -1171,18 +928,14 @@ void CommandHandler::handleTopic(Client& client, const Message& msg) {
 		{
 			// RPL_TOPIC (332)
 			std::string topic_reply = ":" + m_server_name + " 332 " +
-			client.getNickname() + " " +
-			channel_name + " :" + chan->getTopic() + "\r\n";
+									client.getNickname() + " " +
+									channel_name + " :" + chan->getTopic() + "\r\n";
 			sendReply(client, topic_reply);
 		}
 		else
 		{
 			// RPL_NOTOPIC (331)
-			std::string no_topic = MessageBuilder::buildNumericReply(
-				m_server_name, RPL_NOTOPIC, client.getNickname(),
-				channel_name + " :No topic is set"
-			);
-			sendReply(client, no_topic);
+			sendNumeric(client, RPL_NOTOPIC, channel_name + " :No topic is set");
 		}
 	}
 	else
@@ -1190,13 +943,7 @@ void CommandHandler::handleTopic(Client& client, const Message& msg) {
 		// Check if channel is +t (topic protected)
 		if (chan->isTopicProtected() && !chan->isOperator(client.getFD()))
 		{
-			std::string error = MessageBuilder::buildErrorReply(
-				m_server_name, ERR_CHANOPRIVSNEEDED,
-				client.getNickname(),
-				channel_name,
-				"You're not channel operator"
-			);
-			sendReply(client, error);
+			sendError(client, ERR_CHANOPRIVSNEEDED, channel_name, "You're not channel operator");
 			return;
 		}
 
@@ -1231,26 +978,14 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 	// Check if client is registered
 	if (!client.isRegistered())
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOTREGISTERED,
-			client.getNickname().empty() ? "*" : client.getNickname(),
-			"",
-			"You have not registered"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOTREGISTERED, "", "You have not registered");
 		return;
 	}
 
 	// Check if channel parameter is provided
 	if (msg.params.empty())
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NEEDMOREPARAMS,
-			client.getNickname(),
-			"MODE",
-			"Not enough parameters"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NEEDMOREPARAMS, "MODE", "Not enough parameters");
 		return;
 	}
 
@@ -1261,26 +996,14 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 	if (!chan)
 	{
 		// Channel doesn't exist
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOSUCHCHANNEL,
-			client.getNickname(),
-			channel_name,
-			"No such channel"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOSUCHCHANNEL, channel_name, "No such channel");
 		return;
 	}
 
 	// Check if sender is a member of the channel
 	if (!chan->isMember(client.getFD()))
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_NOTONCHANNEL,
-			client.getNickname(),
-			channel_name,
-			"You're not on that channel"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_NOTONCHANNEL, channel_name, "You're not on that channel");
 		return;
 	}
 
@@ -1316,10 +1039,7 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 			modes = "+";
 		
 		// Send RPL_CHANNELMODEIS (324)
-		std::string reply = ":" + m_server_name + " 324 " +
-							client.getNickname() + " " +
-							channel_name + " " + modes + mode_params + "\r\n";
-		sendReply(client, reply);
+		sendNumeric(client, RPL_CHANNELMODEIS, channel_name + " " + modes + mode_params);
 		return;
 	}
 
@@ -1327,13 +1047,7 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 	// Check if sender is operator
 	if (!chan->isOperator(client.getFD()))
 	{
-		std::string error = MessageBuilder::buildErrorReply(
-			m_server_name, ERR_CHANOPRIVSNEEDED,
-			client.getNickname(),
-			channel_name,
-			"You're not channel operator"
-		);
-		sendReply(client, error);
+		sendError(client, ERR_CHANOPRIVSNEEDED, channel_name, "You're not channel operator");
 		return;
 	}
 
@@ -1363,35 +1077,37 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 			case 'i':
 			{
 				// Invite-only mode
-				if (action == '+')
-					chan->setInviteOnly(true);
-				else
-					chan->setInviteOnly(false);
-				
-				// Add to applied modes string
-				if (current_action != action)
+				bool new_state = (action == '+');
+				if (chan->isInviteOnly() != new_state)
 				{
-					applied_modes += action;
-					current_action = action;
+					chan->setInviteOnly(new_state);
+
+					// Add to applied modes string
+					if (current_action != action)
+					{
+						applied_modes += action;
+						current_action = action;
+					}
+					applied_modes += 'i';
 				}
-				applied_modes += 'i';
 				break;
 			}
 			case 't':
 			{
 				// Topic protection mode
-				if (action == '+')
-					chan->setTopicProtected(true);
-				else
-					chan->setTopicProtected(false);
-				
-				// Add to applied modes string
-				if (current_action != action)
+				bool new_state = (action == '+');
+                if (chan->isTopicProtected() != new_state)
 				{
-					applied_modes += action;
-					current_action = action;
-				}
-				applied_modes += 't';
+					chan->setTopicProtected(new_state);
+
+					// Add to applied modes string
+                    if (current_action != action)
+					{
+                        applied_modes += action;
+                        current_action = action;
+                    }
+                    applied_modes += 't';
+                }
 				break;
 			}
 			case 'k':
@@ -1400,28 +1116,20 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 				if (action == '+')
 				{
 					// Need key parameter
-					if (param_index >= msg.params.size())
+					if (param_index < msg.params.size())
 					{
-						std::string error = MessageBuilder::buildErrorReply(
-							m_server_name, ERR_NEEDMOREPARAMS,
-							client.getNickname(),
-							"MODE",
-							"Not enough parameters"
-						);
-						sendReply(client, error);
-						continue;
+						std::string key = msg.params[param_index++];
+						chan->setKey(key);
+	
+						// Add to applied modes string
+						if (current_action != action)
+						{
+							applied_modes += action;
+							current_action = action;
+						}
+						applied_modes += 'k';
+						applied_params.push_back(key);
 					}
-					std::string key = msg.params[param_index++];
-					chan->setKey(key);
-
-					// Add to applied modes string
-					if (current_action != action)
-					{
-						applied_modes += action;
-						current_action = action;
-					}
-					applied_modes += 'k';
-					applied_params.push_back(key);
 				}
 				else
 				{
@@ -1442,19 +1150,11 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 			{
 				// Operator privileges mode
 				// Need nickname parameter for both + and -
-				if (param_index >= msg.params.size())
+				if (param_index < msg.params.size())
 				{
-					std::string error = MessageBuilder::buildErrorReply(
-						m_server_name, ERR_NEEDMOREPARAMS,
-						client.getNickname(),
-						"MODE",
-						"Not enough parameters"
-					);
-					sendReply(client, error);
-					continue;
+					std::string target_nick = msg.params[param_index++];
 				}
 				
-				std::string target_nick = msg.params[param_index++];
 				
 				// Find target user by nickname
 				Client* target = m_server.findClientByNickname(target_nick);
