@@ -1,7 +1,7 @@
 NAME = ft_irc
 
 CXX = c++
-CXXFLAGS = -Wall -Wextra -Werror -std=c++17
+CXXFLAGS = -Wall -Wextra -Werror -std=c++17 #-std=c++98
 
 # Debug mode (make debug)
 ifdef DEBUG
@@ -13,12 +13,13 @@ endif
 # SRCDIR = src
 INCDIR = inc
 OBJDIR = obj
+TESTDIR = tests
 
 # Source files
 NETWORK_SRCS = $(shell find src/network -name '*.cpp')
 PROTOCOL_SRCS = $(shell find src/protocol -name '*.cpp')
 
-TEST_SRCS = test_commands.cpp
+TEST_SRCS = tests/test_commands.cpp #test_builder.cpp #test_parser.cpp
 
 # All sources
 SRCS = $(NETWORK_SRCS) $(PROTOCOL_SRCS) $(TEST_SRCS)

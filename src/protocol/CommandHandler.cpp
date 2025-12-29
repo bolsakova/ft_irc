@@ -1,3 +1,13 @@
+/**
+ * CommandHandler.cpp
+ * 
+ * IRC command dispatcher and handler implementation.
+ * Routes parsed messages to appropriate command handlers (PASS, NICK, USER,
+ * PING, QUIT, PRIVMSG, JOIN, PART, KICK, INVITE, TOPIC, MODE).
+ * 
+ * RFC 1459: https://tools.ietf.org/html/rfc1459
+ */
+
 #include "../../inc/protocol/CommandHandler.hpp"
 #include "../../inc/protocol/Replies.hpp"
 #include "../../inc/network/Server.hpp"
@@ -20,7 +30,7 @@ CommandHandler::CommandHandler(Server& server, const std::string& password)
 }
 
 /**
- * @brief Helper function to append a reply to clientš output buffer.
+ * @brief Helper function to append a reply to client's output buffer.
  * The server's send loop will transmit it when socket is ready.
  * 
  * @param client Client to send reply to
@@ -35,21 +45,10 @@ void CommandHandler::sendReply(Client& client, const std::string& reply) {
 }
 
 /**
- * @brief Validate nickname according to RFC 1459 rules.
- * 
- * RFC 1459 nickname format:
- * 	- Length: 1-9 characters
- * 	- First char: letter or special = [ ] \ ` _ ^ { | }
- * 	- Other chars: letter, digit, special, or hyphen (-)
+ * Validate nickname according to RFC 1459 rules.
  * 
  * @param nickname Nickname string to validate
  * @return true if valid, false otherwise
- * 
- * Algorithm:
- * 			1. Check length: must be 1-9 characters
- * 			2. Check first character: must be letter or special
- * 			3. Check remaining characters: letter, digit, special, or hyphen
- * 			4. Return false if any check fails, true otherwise
  */
 bool CommandHandler::isValidNickname(const std::string& nickname) {
 	// Step 1: Check length constraints
@@ -80,19 +79,12 @@ bool CommandHandler::isValidNickname(const std::string& nickname) {
 }
 
 /**
- * @brief Check if a nickname is already in use by another client
+ * Check if a nickname is already in use by another client
  * Used to prevent duplicate nicknames on the server
  * 
  * @param nickname Nickname to check
  * @param exclude_fd File descriptor to exclude (for nick changes)
  * @return true if nickname is taken, false if available
- * 
- * Algorithm:
- * 			1. Get reference to all connected clients from server
- * 			2. Iterate through each client in the map
- * 			3. Skip the client with exclude_fd (allows client to keep same nick)
- * 			4. Compare nicknames (case-sensitive in IRC)
- * 			5. Return true if match found, false if nickname is free
  */
 bool CommandHandler::isNicknameInUse(const std::string& nickname, int exclude_fd) {
 	// Get reference to server's client map
@@ -115,7 +107,7 @@ bool CommandHandler::isNicknameInUse(const std::string& nickname, int exclude_fd
 }
 
 /**
- * @brief Validate channel name according to IRC rules
+ * Validate channel name according to IRC rules
  * 
  * @param name Channel name to validate
  * @return True if valid, false otherwise
@@ -123,7 +115,6 @@ bool CommandHandler::isNicknameInUse(const std::string& nickname, int exclude_fd
  * IRC channel name rules:
  * 		- Starts with # or &
  * 		- Length: 1-50 characters (including #)
- * 		- Cannot contain: space, comma, control-G (bell)
  */
 bool CommandHandler::isValidChannelName(const std::string& name) {
 	// Check minimum length (at least # + 1 char)
@@ -151,17 +142,10 @@ bool CommandHandler::isValidChannelName(const std::string& name) {
 }
 
 /**
- * @brief Send welcome messages (RPL_WELCOME through RPL_MYINFO) to client.
+ * Send welcome messages (RPL_WELCOME through RPL_MYINFO) to client.
  * Called after successful registration (PASS + NICK + USER complete)
  * 
  * @param client Newly registered client
- * 
- * Algorithm:
- * 			1. Build RPL_WELCOME (001): "Welcome to the IRC Network nick!user@host"
- * 			2. Build RPL_YOURHOST (002): "Your host is servername, version"
- * 			3. Build RPL_CREATED (003): "This server was created <date>"
- * 			4. Build RPL_MYINFO (004): "servername version user_modes chan_modes"
- * 			5. Send each reply to client's output buffer
  */
 void CommandHandler::sendWelcome(Client& client) {
 	// RPL_WELCOME (001): Welcome message with full client identifier
@@ -195,20 +179,8 @@ void CommandHandler::sendWelcome(Client& client) {
 }
 
 /**
- * @brief Handle PASS command - authenticate client with server password.
+ * Handle PASS command - authenticate client with server password.
  * Format: PASS <password>
- * 
- * @param client Client sending the command
- * @param msg Parsed message with command and parameters
- * 
- * Algorithm:
- * 			1. Check if client is already registered -> error 462
- * 			2. Check if password parameter exists -> error 461
- * 			3. Extract password from params[0] or trailing
- * 			4. Compare with server password
- * 			5. If match: set client.setAuthenticated(true)
- * 			6. If no match: send error 464 (ERR_PASSWDMISMATCH)
- * 			7. Log authenticated result
  */
 void CommandHandler::handlePass(Client& client, const Message& msg) {
 	// Check if client already completed registration
@@ -249,20 +221,8 @@ void CommandHandler::handlePass(Client& client, const Message& msg) {
 }
 
 /**
- * @brief Handle NICK command - set or change client's nickname.
+ * Handle NICK command - set or change client's nickname.
  * Format: NICK <nickname>
- * 
- * @param client Client sending the command
- * @param msg Parsed message with command and parameters
- * 
- * Algorithm:
- * 			1. Check if nickname parameter exists -> error431
- * 			2. Extract nickname from params[0] or trailing
- * 			3. Validate nickname format (RFC 1459) -> error 432
- * 			4. Check if nickname already in use -> error 433
- * 			5. Set client's nickname
- * 			6. If already registered: notify about nick change
- * 			7. Check if registration is now complete -> send welcome
  */
 void CommandHandler::handleNick(Client& client, const Message& msg) {
 	// Check if nickname parameter was provided
@@ -324,19 +284,8 @@ void CommandHandler::handleNick(Client& client, const Message& msg) {
 }
 
 /**
- * @brief Handle USER command - set username and realname.
+ * Handle USER command - set username and realname.
  * Format: USER <username> <hostname> <servername> :<realname>
- * 
- * @param client Client sending the command
- * @param msg Parsed message with command and parameters
- * 
- * Algorithm:
- * 			1. Check if already registered -> erorr 462
- * 			2. Check parameter count (need 3 params + trailing) -> error 461
- * 			3. Extract username from params[0]
- * 			4. Extract realname from trailing
- * 			5. Set client's username and realname
- * 			6. Check if registration is now complete -> send welcome
  */
 void CommandHandler::handleUser(Client& client, const Message& msg) {
 	// Check if client already completed registration
@@ -383,18 +332,8 @@ void CommandHandler::handleUser(Client& client, const Message& msg) {
 }
 
 /**
- * @brief Handle PING command - respond with PONG to keep connection alive.
+ * Handle PING command - respond with PONG to keep connection alive.
  * Format: PING <token> or PING :<token>
- * 
- * @param client Client sending the command
- * @param msg Parsed message with command and parameters
- * 
- * Algorithm:
- * 			1. Check if client is registered -> error 451
- * 			2. Extract token from params[0] or trailing
- * 			3. If token is empty -> use server_name as default
- * 			4. Build PONG response: :<server> PONG <server> :<token>
- * 			5. Send PONG to client
  */
 void CommandHandler::handlePing(Client& client, const Message& msg)
 {
@@ -436,20 +375,6 @@ void CommandHandler::handlePing(Client& client, const Message& msg)
 /**
  * @brief Handle QUIT command - disconnect cliet from server.
  * Format: QUIT [:<reason>]
- * 
- * @param client Client sending the command
- * @param msg Parsed message with command and parameters
- * 
- * Algorithm:
- * 			1. Extract reason from trailing (or use default "Client exited")
- * 			2. Build QUIT message with client prefix
- * 			3. Find all channels where client is a member
- * 			4. Broadcast QUIT to all channel members
- * 			5. Remove client from all channels
- * 			6. Mark client for disconnection
- * 			7. Log quit action
- * 
- * @note Client can use QUIT even without registration
  */
 void CommandHandler::handleQuit(Client& client, const Message& msg)
 {
@@ -491,26 +416,8 @@ void CommandHandler::handleQuit(Client& client, const Message& msg)
 }
 
 /**
- * @brief Handle PRIVMSG command - send private message to user or channel.
+ * Handle PRIVMSG command - send private message to user or channel.
  * Format: PRIVMSG <target> :<message>
- * 
- * @param client Client sending the command
- * @param msg Parsed message with command and parameters
- * 
- * Algorithm:
- * 			1. Check if client is registered -> error 451
- * 			2. Check if target parameter exists -> error 411
- * 			3. Check if message text exists -> 412
- * 			4. Determine target type:
- * 				- If starts with # -> channel
- * 				- Otherwise -> user nickname
- * 			5. For channel:
- * 				- Check channel exists -> error 403
- * 				- Check sender is member -> error 404
- * 				- Broadcast to all members except sender
- * 			6. For user:
- * 				- Find target user by nickname -> error 401
- * 				- Send message to target
  */
 void CommandHandler::handlePrivmsg(Client& client, const Message& msg)
 {
@@ -654,25 +561,8 @@ void CommandHandler::handlePrivmsg(Client& client, const Message& msg)
 }
 
 /**
- * @brief Handle JOIN command - join or create a channel
+ * Handle JOIN command - join or create a channel
  * Format: JOIN <channel> [key]
- * 
- * @param client Client sending the command
- * @param msg Parsed message with command and parameters
- * 
- * Algorithm:
- * 			1. Check if client is registered -> error 451
- * 			2. Check if channel parameter exists -> error 461
- * 			3. Extract channel name and optional key
- * 			4. Validate channel name format
- * 			5. Find or create channel:
- * 				- If not exists: create and make client operator
- * 				- If exists: check modes (+i, +k, +l)
- * 			6. Add client to channel
- * 			7. Send JOIN confirmation to client
- * 			8. Broadcast JOIN to all channel members
- * 			9. Send NAMES list (RPL_NAMREPLY + RPL_ENDOFNAMES)
- * 			10. Send TOPIC if set (RPL_TOPIC or RPL_NOTOPIC)
  */
 void CommandHandler::handleJoin(Client& client, const Message& msg) {
 	// Check if client is registered
@@ -848,26 +738,8 @@ void CommandHandler::handleJoin(Client& client, const Message& msg) {
 }
 
 /**
- * @brief Handle PART command - client leaves a channel
+ * Handle PART command - client leaves a channel
  * Syntax: PART <channel> [<reason>]
- * 
- * @param client Client sending the command
- * @param msg Parsed message with command and parameters
- * 
- * Algorithm:
- * 		1. Check if client is registered
- * 		2. Verify channel parameter is provided
- * 		3. Validate channel exists
- * 		4. Check if client is a member of the channel
- * 		5. Remove client from channel
- * 		6. Broadcast PART message to all channel members (including sender)
- * 		7. Optionally include reason for leaving
- * 
- * Responses:
- * 		- ERR_NEEDMOREPARAMS (461): No channel specified
- * 		- ERR_NOSUCHCHANNEL (403): Channel doesn't exist
- * 		- ERR_NOTONCHANNEL (442): Client is not on that channel
- * 		- Success: :nick!user@host PART #channel [:reason]
  */
 void CommandHandler::handlePart(Client& client, const Message& msg) {
 	// Check if client is registered
@@ -950,31 +822,8 @@ void CommandHandler::handlePart(Client& client, const Message& msg) {
 }
 
 /**
- * @brief Handle KICK command - operator removes user from channel
+ * Handle KICK command - operator removes user from channel
  * Format: KICK <channel> <user> [<reason>]
- * 
- * @param client Client sending the command
- * @param msg Parsed message with command and parameters
- * 
- * Algorithm:
- * 		1. Check if client is registered
- * 		2. Verify channel and user parameters are provided
- * 		3. Validate channel exists
- * 		4. Check if sender is on the channel
- * 		5. Check if sender is a channel operator
- * 		6. Find target user by nickname
- * 		7. Check if target is on the channel
- * 		8. Remove target from channel
- * 		9. Broadcast KICK message to all channel members (including kicked user)
- * 		10. Optionally include reason
- * 
- * Responses:
- * 		- ERR_NEEDMOREPARAMS (461): Missing channel or user parameter
- * 		- ERR_NOSUCHCHANNEL (403): Channel doesn't exist
- * 		- ERR_NOTONCHANNEL (442): Sender is not on that channel
- * 		- ERR_CHANOPRIVSNEEDED (482): Sender is not a channel operator
- * 		- ERR_USERNOTINCHANNEL (441): Target user is not on channel
- * 		- Success: :operator!user@host KICK #channel target [:reason]
  */
 void CommandHandler::handleKick(Client& client, const Message& msg) {
 	// Check if client is registered
@@ -1100,32 +949,8 @@ void CommandHandler::handleKick(Client& client, const Message& msg) {
 }
 
 /**
- * @brief Handle INVITE command - invite user to channel
+ * Handle INVITE command - invite user to channel
  * Format: INVITE <nickname> <channel>
- * 
- * @param client Client sending the command
- * @param msg Parsed message with command and parameters
- * 
- * Algorithm:
- * 		1. Check if client is registered
- * 		2. Verify nickname and channel parameters are provided
- * 		3. Validate channel exists
- * 		4. Check if sender is on the channel
- * 		5. Check if sender is operator (if channel is +i)
- * 		6. Find target user by nickname
- * 		7. Check if target is already on channel
- * 		8. Add target to invited list
- * 		9. Send INVITE notification to target
- * 		10. Send RPL_INVITING confirmation to sender
- * 
- * Responses:
- * 		- ERR_NEEDMOREPARAMS (461): Missing nickname or channel parameter
- * 		- ERR_NOSUCHCHANNEL (403): Channel doesn't exist
- * 		- ERR_NOTONCHANNEL (442): Sender is not on that channel
- * 		- ERR_CHANOPRIVSNEEDED (482): Need operator privileges (for +i channels)
- * 		- ERR_NOSUCHNICK (401): Target user doesn't exist
- * 		- ERR_USERONCHANNEL (443): Target is already on channel
- * 		- Success: INVITE message to target + RPL_INVITING (341) to sender
  */
 void CommandHandler::handleInvite(Client& client, const Message& msg) {
 	// Check if client is registered
@@ -1278,33 +1103,8 @@ void CommandHandler::handleInvite(Client& client, const Message& msg) {
 }
 
 /**
- * @brief Handle TOPIC command - view or change channel topic
+ * Handle TOPIC command - view or change channel topic
  * Format: TOPIC <channel> [:<new topic>]
- * 
- * @param client Client sending the command
- * @param msg  Parsed message with command and parameters
- * 
- * Algorithm:
- * 		1. Check if client is registered
- * 		2. Verify channel parameter is provided
- * 		3. Validate channel exists
- * 		4. Check if sender is a member of the channel
- * 		5. If no new topic provided:
- * 			- Send current topic (RPL_TOPIC) or RPL_NOTOPIC
- * 		6. If new topic provided:
- * 			- Check if channel is +t (topic protected)
- * 			- If +t, verify sender is operator
- * 			- Set new topic
- * 			- Broadcast TOPIC change to all members
- * 
- * Responses:
- * 		- ERR_NEEDMOREPARAMS (461): No channel specified
- * 		- ERR_NOSUCHCHANNEL (403): Channel doesn't exist
- * 		- ERR_NOTONCHANNEL (442): Sender is not on that channel
- * 		- ERR_CHANOPRIVSNEEDED (482): Need operator privileges (for +t channels)
- * 		- RPL_TOPIC (332): Current topic
- * 		- RPL_NOTOPIC (331): No topic set
- * 		- Success: :nick!user@host TOPIC #channel :new topic
  */
 void CommandHandler::handleTopic(Client& client, const Message& msg) {
 	// Check if client is registered
@@ -1424,46 +1224,8 @@ void CommandHandler::handleTopic(Client& client, const Message& msg) {
 }
 
 /**
- * @brief Handle MODE command - view or change channel modes
+ * Handle MODE command - view or change channel modes
  * Format: MODE <channel> [<+/-modes> [parameters...]]
- * 
- * @param client Client sending the command
- * @param msg Parsed message with command and parameters
- * 
- * Algorithm:
- * 		1. Check if client is registered
- * 		2. Verify channel parameter is provided
- * 		3. Validate channel exists
- * 		4. Check if sender is a member of the channel
- * 		5. If no mode string provided (viewing):
- * 			- Build current mode string from channel state
- * 			- Send RPL_CHANNELMODEIS with modes and parameters
- * 		6. If mode string provided (changing):
- * 			- Check if sender is operator
- * 			- Parse mode string character by character
- * 			- Track +/- action state
- * 			- Apply each mode (i, t, k, o, l)
- * 			- Consume parameters for +k, +o, -o, +l
- * 			- Build applied mode string
- * 			- Broadcast MODE change to all members
- * 
- * Supported modes:
- * 		+i/-i: Invite-only channel
- * 		+t/-t: Topic protection (only ops can change)
- * 		+k/-k: Channel key/password (+k <key>)
- * 		+o/-o: Grant/revoke operator privileges (+o/-o <nickname>)
- * 		+l/-l: User limit (+l <number>)
- * 
- * Responses:
- * 		- ERR_NOTREGISTERED (451): Client not registered
- * 		- ERR_NEEDMOREPARAMS (461): Missing channel parameter or mode parameters
- * 		- ERR_NOSUCHCHANNEL (403): Channel doesn't exist
- * 		- ERR_NOTONCHANNEL (442): Sender is not on that channel
- * 		- ERR_CHANOPRIVSNEEDED (482): Need operator privileges to change modes
- * 		- ERR_USERNOTINCHANNEL (441): Target user not on channel (for +o/-o)
- * 		- ERR_UNKNOWNMODE (472): Unknown mode character
- * 		- RPL_CHANNELMODEIS (324): Current channel modes (viewing)
- * 		- Success: :nick!user@host MODE #channel +modes [params]
  */
 void CommandHandler::handleMode(Client& client, const Message& msg) {
 	// Check if client is registered
@@ -1834,19 +1596,8 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 
 /**
  * @brief Main command dispatcher - routes commands to appropriate handlers.
- * 
  * @param raw_command Complete IRC command with \r\n
  * @param client Client who sent the command
- * 
- * Algorithm:
- * 			1. Try to parse command using Parser::parse()
- * 			2. Log the parsed command
- * 			3. Route based on command name:
- * 				- "PASS" -> handlePass()
- * 				- "NICK" -> handleNick()
- * 				- "USER" -> handleUser()
- * 				- unknown -> ERR_UNKNOWNCOMMAND (421)
- * 			4. Catch parsing errors and log them
  */
 void CommandHandler::handleCommand(const std::string& raw_command, Client& client) {
 	try {

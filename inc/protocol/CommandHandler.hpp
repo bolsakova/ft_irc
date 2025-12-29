@@ -19,27 +19,27 @@ class Server;
  */
 class CommandHandler {
 	private:
-			Server& m_server;					// reference to server for client access
-			const std::string& m_password;		// server password for authemtication
-			const std::string m_server_name;	// server name for replies
+			Server&	m_server;					// reference to server for client access
+			const	std::string& m_password;	// server password for authentication
+			const	std::string m_server_name;	// server name for replies
 
 			// commands to handle
-			void handlePass(Client& client, const Message& msg);	// PASS
-			void handleNick(Client& client, const Message& msg);	// NICK
-			void handleUser(Client& client, const Message& msg);	// USER
-			void handlePing(Client& client, const Message& msg);	// PING
-			void handleQuit(Client& client, const Message& msg);	// QUIT
-			void handlePrivmsg(Client& client, const Message& msg);	// PRIVMSG
-			void handleJoin(Client& client, const Message& msg);	// JOIN
-			void handlePart(Client& client, const Message& msg);	// PART
-			void handleKick(Client& client, const Message& msg);	// KICK
-			void handleInvite(Client& client, const Message& msg);	// INVITE
-			void handleTopic(Client& client, const Message& msg);	// TOPIC
-			void handleMode(Client& client, const Message& msg);	// MODE
-
-			bool isNicknameInUse(const std::string& nickname, int exclude_fd = -1);	// Check if nickname is already taken by another client
-			bool isValidNickname(const std::string& nickname);						// Validate nickname according to RFC 1459
-			bool isValidChannelName(const std::string& name);						// Validate channel name
+			void	handlePass(Client& client, const Message& msg);
+			void	handleNick(Client& client, const Message& msg);
+			void	handleUser(Client& client, const Message& msg);
+			void	handlePing(Client& client, const Message& msg);
+			void	handleQuit(Client& client, const Message& msg);
+			void	handlePrivmsg(Client& client, const Message& msg);
+			void	handleJoin(Client& client, const Message& msg);
+			void	handlePart(Client& client, const Message& msg);
+			void	handleKick(Client& client, const Message& msg);
+			void	handleInvite(Client& client, const Message& msg);
+			void	handleTopic(Client& client, const Message& msg);
+			void	handleMode(Client& client, const Message& msg);
+			// necessary checks
+			bool	isNicknameInUse(const std::string& nickname, int exclude_fd = -1);
+			bool	isValidNickname(const std::string& nickname);
+			bool	isValidChannelName(const std::string& name);
 
 			void sendWelcome(Client& client);							// Send welcome messages (001-004) to newly registered client
 			void sendReply(Client& client, const std::string& reply);	// Append reply to client's output buffer
