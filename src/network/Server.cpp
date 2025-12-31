@@ -279,38 +279,67 @@ void Server::disablePolloutForFd(int fd)
 	}
 }
 
-// 2. Partial command handling. 
-// TODO - Client::getInBuf() возвращает const std::string&, 
-// здесь попытка  привязать его к неконстантной ссылке std::string& inbuf —
-// нельзя привязать неконстантную ссылку к значению/ссылке с квалификатором const.
-bool Server::receiveData(int fd) 
+// 2. Partial command handling — proper non-blocking receive loop
+bool Server::receiveData(int fd)
 {
-    char buffer[512];
-    ssize_t bytes = recv(fd, buffer, sizeof(buffer) - 1, 0); 
-    if (bytes <= 0) 
-        return false;  // Connection closed or error
-    buffer[bytes] = '\0';
-    Client* client = m_clients[fd].get();
-    
-    // Append to client's input buffer
-    client->appendToInBuf(std::string(buffer, bytes));
-    // Process complete commands (ending with \r\n)
-    std::string& inbuf = client->getInBuf();
-    size_t pos;
-    
-    while ((pos = inbuf.find("\r\n")) != std::string::npos) 
-    {
-        std::string command = inbuf.substr(0, pos + 2);
-        inbuf.erase(0, pos + 2);
-        m_cmd_handler->handleCommand(command, *client);
-    } 
-    // Check buffer overflow (max 512 bytes per IRC message)
-    if (inbuf.size() > 512) 
-    {
-        inbuf.clear();
-        return false;
-    }
-    return true;
+	char buffer[4096];
+	ssize_t bytes_read;
+	while (true)
+	{
+		bytes_read = recv(fd, buffer, sizeof(buffer), 0);
+		if (bytes_read < 0)
+		{
+			if (errno == EAGAIN || errno == EWOULDBLOCK)
+				break; // no more data for now
+			std::cerr << "recv() failed on fd " << fd << ": "
+					  << std::strerror(errno) << std::endl;
+			disconnectClient(fd);
+			return false;
+		}
+		if (bytes_read == 0)
+		{
+			// peer closed input (EOF)
+			std::cout << "Client fd " << fd << " closed input (EOF).\n";
+			auto it = m_clients.find(fd);
+			if (it == m_clients.end())
+				return false;
+			Client &client = *(it->second);
+			client.markPeerClosed();
+			// Stop reading: no more POLLIN. But keep POLLOUT to flush outbuf.
+			disable_pollevent(m_poll_fds, fd, POLLIN);
+			if (!client.hasDataToSend())
+			{
+				disconnectClient(fd);
+				return false;
+			}
+			return true;
+		}
+		// Find client safely
+		auto it = m_clients.find(fd);
+		if (it == m_clients.end())
+			return false; // client already removed
+		Client &client = *(it->second);
+
+		std::string data(buffer, static_cast<std::size_t>(bytes_read));
+		const std::size_t MAX_INBUF = 8192;
+		if (client.getInBuf().size() + data.size() > MAX_INBUF)
+		{
+			std::cerr << "Input buffer overflow for fd " << fd
+					  << " (limit " << MAX_INBUF << ")\n";
+			disconnectClient(fd);
+			return false;
+		}
+		client.appendToInBuf(data);
+		// Process all complete commands currently in buffer
+		while (client.hasCompleteCmd())
+		{
+			std::string cmd = client.extractNextCmd();
+			m_cmd_handler->handleCommand(cmd, client);
+			if (client.hasDataToSend())
+				enablePolloutForFD(fd);
+		}
+	}
+	return true;
 }
 
 // /**
