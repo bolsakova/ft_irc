@@ -151,7 +151,7 @@ void Server::run() {
             }
         }
         
-        // Disconnect clients marked for removal
+        // TODO Disconnect clients marked for removal
         cleanupDisconnectedClients();
     }
 }
@@ -184,7 +184,10 @@ void Server::stop() {
     }
 }
 
-// 2. Partial command handling
+// 2. Partial command handling. 
+// TODO - Client::getInBuf() возвращает const std::string&, 
+// здесь попытка  привязать его к неконстантной ссылке std::string& inbuf —
+// нельзя привязать неконстантную ссылку к значению/ссылке с квалификатором const.
 bool Server::receiveData(int fd) {
     char buffer[512];
     ssize_t bytes = recv(fd, buffer, sizeof(buffer) - 1, 0);
@@ -224,12 +227,15 @@ bool Server::receiveData(int fd) {
 ```cpp
 class Client {
 private:
+	//это было уже в клиенте:  m_inbuf и m_outbuf
     std::string m_input_buffer;   // Partial commands
     std::string m_output_buffer;  // Data to send
     
 public:
+	//эти функции уже были реализованы 
     void appendToInBuf(const std::string& data) { m_input_buffer += data; }
     std::string& getInBuf() { return m_input_buffer; }
+	// эту я не нашла нигде не вызывается, поэтому пока не добавляю
     void clearInBuf() { m_input_buffer.clear(); }
 };
 ```
