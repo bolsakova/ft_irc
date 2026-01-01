@@ -7,6 +7,7 @@ Server* g_server = NULL;
 
 void signalHandler(int signum) 
 {
+    (void)signum;//added to avoid unused parameter warning
     if (g_server) 
 	{
         std::cout << "\nShutting down server...\n";
@@ -29,6 +30,7 @@ int main(int ac, char* av[])
         std::cerr << "Error: Port must be between 1024 and 65535\n";
         return 1;
     }
+    std::string port_str = av[1];//01.01 added to match Server constructor
 
     std::string password = av[2];
     if (password.empty()) 
@@ -39,7 +41,7 @@ int main(int ac, char* av[])
 
     try 
 	{
-        Server server(port, password);
+        Server server(port_str, password);//01.01 edited port_str, not port
         g_server = &server;
 
         // Setup signal handlers
