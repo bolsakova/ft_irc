@@ -46,7 +46,8 @@ static void ignore_sigpipe()
 	sigemptyset(&sa.sa_mask);
 	sigaction(SIGPIPE, &sa, NULL);
 }
-
+// TODO допустимо, но если строго «constructor does not fail silently», 
+// либо кидать исключение, либо перенести тяжелые операции в явный метод.
 Server::Server(const std::string& port, const std::string& password)
 	: m_listen_fd(-1), m_running(true), m_password(password)
 {
@@ -59,6 +60,12 @@ Server::Server(const std::string& port, const std::string& password)
 	}
 	// Создаём CommandHandler после успешной инициализации сокета
 	m_cmd_handler = std::make_unique<CommandHandler>(*this, m_password);
+	// Начинаем отслеживать слушающий сокет в poll()
+	pollfd listen_pfd;
+	listen_pfd.fd = m_listen_fd;
+	listen_pfd.events = POLLIN;
+	listen_pfd.revents = 0;
+	m_poll_fds.push_back(listen_pfd);
 	std::cout << "Server started on port " << port << std::endl;
 }
 
