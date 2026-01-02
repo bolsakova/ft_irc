@@ -265,6 +265,7 @@ void CommandHandler::handleNick(Client& client, const Message& msg) {
 				chan->broadcast(nick_change, client.getFD());
 			}
 		}
+		std::cout << "Nick change broadcast: " << old_nick << " -> " << new_nick << "\n";
 	}
 	
 	// Check if client can now be registered
@@ -1033,8 +1034,125 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 		return;
 	}
 
-	std::string channel_name = msg.params[0];
+	std::string target = msg.params[0];
 
+	// Check if target is a channel or user
+    if (!target.empty() && (target[0] == '#' || target[0] == '&'))
+    {
+        // CHANNEL MODE
+        handleChannelMode(client, msg, target);
+    }
+    else
+    {
+        // USER MODE
+        handleUserMode(client, msg, target);
+    }
+}
+
+/**
+ * @brief Handle user MODE command
+ * Format: MODE <nickname> [+/-modes]
+ */
+void CommandHandler::handleUserMode(Client& client, const Message& msg, const std::string& target) {
+	// User can only set modes for themselves
+	if (target != client.getNickname())
+	{
+		sendError(client, ERR_USERSDONTMATCH, "", "Cannot change mode for other users");
+		return;
+	}
+
+	// MODE viewing (no mode string provided)
+	if (msg.params.size() == 1)
+	{
+		// Show current user modes
+		std::string modes = client.getUserModes();
+		if (modes.empty())
+			modes = "+";
+		else
+			modes = "+" + modes;
+
+		sendNumeric(client, RPL_UMODEIS, modes);
+		return;
+	}
+
+	// MODE changing
+	std::string mode_string = msg.params[1];
+    char action = '+';
+    std::string applied_modes;
+    char current_action = '\0';
+
+	for (size_t i = 0; i < mode_string.length(); ++i)
+	{
+		char c = mode_string[i];
+
+		// Handle action switches
+        if (c == '+' || c == '-')
+        {
+            action = c;
+            continue;
+        }
+
+		// Process mode character
+		if (c == 'i')
+		{
+			// Invisible mode
+			bool new_state = (action == '+');
+			if (client.hasUserMode('i') != new_state)
+            {
+                client.setUserMode('i', new_state);
+                
+                // Add to applied modes
+                if (current_action != action)
+                {
+                    applied_modes += action;
+                    current_action = action;
+                }
+                applied_modes += 'i';
+            }
+		}
+		else if (c == 'o')
+		{
+			// Operator mode - can only be removed, not added by user
+			if (action == '-')
+			{
+				if (client.hasUserMode('o'))
+				{
+					client.setUserMode('o', false);
+					
+					// Add to applied modes
+					if (current_action != action)
+					{
+						applied_modes += action;
+						current_action = action;
+					}
+					applied_modes += 'o';
+				}
+			}
+			// Ignore +o (users can't make themselves operators)
+		}
+		else
+		{
+			// Unknown mode - ignore or send error
+            sendError(client, ERR_UMODEUNKNOWNFLAG, "", "Unknown MODE flag");
+		}
+	}
+
+	// Send confirmation if any modes were changed
+	if (!applied_modes.empty())
+    {
+        std::string mode_msg = ":" + client.getNickname() + " MODE " +
+                              client.getNickname() + " :" + applied_modes + "\r\n";
+        sendReply(client, mode_msg);
+        
+        std::cout << client.getNickname() << " set user modes: " << applied_modes << "\n";
+    }
+}
+
+/**
+ * @brief Handle channel MODE command
+ * Format: MODE <channel> [+/-modes] [parameters]
+ */
+void CommandHandler::handleChannelMode(Client& client, const Message& msg, const std::string& channel_name) {
 	// Validate channel exists
 	Channel* chan = m_server.findChannel(channel_name);
 	if (!chan)
@@ -1322,17 +1440,139 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 	}
 }
 
+/**
+ * @brief Handle CAP command - capability negotiation
+ * Format: CAP <subcommand> [:<capabilities>]
+ * 
+ * Miminal implementation for irssi compatibility.
+ * We don't support any capabilities, just acknowledge the negotiation.
+ */
 void CommandHandler::handleCap(Client& client, const Message& msg) {
+	// CAP command doesn't require registration
 	if (msg.params.empty())
 		return;
-	if (msg.params[0] == "LS")
+	
+	std::string subcommand = msg.params[0];
+
+	if (subcommand == "LS")
 	{
-		// empty list of capabilities
-		sendReply(client, ":ircserv CAP * LS :\r\n");
+		// Client requests list of capabilities
+		std::string cap_reply = ":ircserv CAP " + 
+                                (client.getNickname().empty() ? "*" : client.getNickname()) +
+                                " LS :\r\n";
+        sendReply(client, cap_reply);
+		std::cout << "Client fd " << client.getFD() << " CAP LS (empty list sent)\n";
 	}
-	else if (msg.params[0] == "END") {
-		// Client finishes negotiation - nothing to do
-	};
+	else if (subcommand == "END")
+	{
+		// Client finished capability negotiation
+		std::cout << "Client fd " << client.getFD() << " CAP END\n";
+		// Nothing to do, client will continue with PASS/NICK/USER
+	}
+	else if (subcommand == "REQ")
+	{
+		// Client requests specific capabilities
+		// We support none, so send NAK (negative acknowledgement)
+		std::string cap_reply = ":ircserv CAP " + 
+                                (client.getNickname().empty() ? "*" : client.getNickname()) +
+                                " NAK :" + msg.trailing + "\r\n";
+		sendReply(client, cap_reply);
+		std::cout << "Client fd " << client.getFD() << " CAP REQ (rejected)\n";
+	}
+}
+
+/**
+ * @brief Handle WHO command - list users in channel or matching pattern
+ * Format: WHO <channel|mask>
+ * 
+ * Returns information about users in a channel or matching a pattern.
+ * Used by irssi to query channel members.
+ */
+void CommandHandler::handleWho(Client& client, const Message& msg) {
+	// Check if client is registered
+    if (!client.isRegistered())
+    {
+        sendError(client, ERR_NOTREGISTERED, "", "You have not registered");
+        return;
+    }
+
+    // Check if parameter was provided
+    if (msg.params.empty())
+    {
+        sendError(client, ERR_NEEDMOREPARAMS, "WHO", "Not enough parameters");
+        return;
+    }
+
+	std::string target = msg.params[0];
+
+	// Check if target is a channel
+	if (!target.empty() && target[0] == '#')
+	{
+		// Find channel
+		Channel* chan = m_server.findChannel(target);
+
+		if (!chan)
+		{
+			// Channel doesn't exist - send end of WHO with no entries
+			sendNumeric(client, RPL_ENDOFWHO, target + " :End of WHO list");
+			return;
+		}
+
+		// Send RPL_WHOREPLY for each member in the channel
+		const std::map<int, Client*>& members = chan->getMembers();
+
+		for (std::map<int, Client*>::const_iterator it = members.begin();
+			it != members.end(); ++it)
+		{
+			Client* member = it->second;
+
+			// Build WHO reply
+            // Format: :server 352 nick <channel> <user> <host> <server> <nick> <flags> :<hopcount> <realname>
+            // Flags: H = here, G = gone (away), @ = operator, + = voice
+            std::string flags = "H";	// H = here (not away)
+            if (chan->isOperator(member->getFD()))
+                flags += "@";
+            
+            std::string who_msg = ":" + m_server_name + " 352 " +
+                            	client.getNickname() + " " +
+                                target + " " +						// channel (no colon!)
+                                member->getUsername() + " " +
+                                "localhost" + " " +
+                                m_server_name + " " +
+                                member->getNickname() + " " +
+                                flags + " :0 " +					// colon before hopcount
+                                member->getRealname() + "\r\n";	// realname
+            sendReply(client, who_msg);
+		}
+		
+		// Send end of WHO list
+		sendNumeric(client, RPL_ENDOFWHO, target + " :End of WHO list");
+		std::cout << client.getNickname() << " queried WHO for " << target << "\n";
+	}
+	else
+	{
+		// Target is a nickname or mask
+		// For simplicity, we'll just check if it matches a specific user
+		Client* target_client = m_server.findClientByNickname(target);
+
+		if (target_client && target_client->isRegistered())
+		{
+			// Send WHO reply for single user
+			std::string who_msg = ":" + m_server_name + " 352 " +
+                                client.getNickname() + " " +
+                                target + " " +						// name (no colon!)
+                                target_client->getUsername() + " " +
+                                "localhost" + " " +
+                                m_server_name + " " +
+                                target_client->getNickname() + " " +
+                                "H :0 " +							// colon before hopcount
+                                target_client->getRealname() + "\r\n";
+			sendReply(client, who_msg);
+		}
+		// Send end of WHO list
+		sendNumeric(client, RPL_ENDOFWHO, target + " :End of WHO list");
+		std::cout << client.getNickname() << " queried WHO for " << target << "\n";
+	}
 }
 
 /**
@@ -1374,6 +1614,8 @@ void CommandHandler::handleCommand(const std::string& raw_command, Client& clien
 			handleMode(client, msg);
 		else if (msg.command == "CAP")
 			handleCap(client, msg);
+		else if (msg.command == "WHO")
+			handleWho(client, msg);
 		else {
 			// Command not recognized or not implemented
 			std::string error = MessageBuilder::buildErrorReply(
