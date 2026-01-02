@@ -1,6 +1,14 @@
 #ifndef REPLIES_HPP
 #define REPLIES_HPP
 
+/**
+ * @file Replies.hpp
+ * @brief IRC numeric reply codes
+ * 
+ * Defines all IRC numeric reply codes used by the server for successful
+ * responses (RPL_) and error messages (ERR_) according to RFC 1459.
+ */
+
 // Successful replies (001-099)
 #define RPL_WELCOME				001
 #define RPL_YOURHOST			002
