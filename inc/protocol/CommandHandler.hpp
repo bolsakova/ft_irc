@@ -10,6 +10,7 @@
 
 // forward declaration to avoid circular dependency
 class Server;
+class Channel;
 
 /**
  * @file CommandHandler.hpp
@@ -55,6 +56,7 @@ class CommandHandler {
 			void sendReply(Client& client, const std::string& reply);
 			void sendError(Client& client, int error_code, const std::string& param, const std::string& message);
 			void sendNumeric(Client& client, int numeric_code, const std::string& message);
+			void broadcastToChannel(Channel& channel, const std::string& message, int exclude_fd = -1);
 
 	public:
 			CommandHandler(Server& server, const std::string& password);	// Constructor for command handler

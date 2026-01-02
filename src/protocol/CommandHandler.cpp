@@ -155,6 +155,7 @@ void CommandHandler::sendWelcome(Client& client) {
  */
 void CommandHandler::sendReply(Client& client, const std::string& reply) {
 	client.appendToOutBuf(reply);
+	m_server.enablePolloutForFD(client.getFD());
 }
 
 /**
@@ -183,6 +184,22 @@ void CommandHandler::sendNumeric(Client& client, int numeric_code, const std::st
 		m_server_name, numeric_code, client.getNickname(), message
 	);
 	sendReply(client, reply);
+}
+
+/**
+ * @brief Broadcast a message to a channel and mark recipients for writing.
+ * Channel::broadcast only appends data to client output buffers. We additionally
+ * enable POLLOUT for every recipient (except optionally the sender) so the
+ * server's poll loop will flush the pending data without waiting for furtherinput from those clients.
+ */
+void CommandHandler::broadcastToChannel(Channel& channel, const std::string& message, int exclude_fd) {
+	channel.broadcast(message, exclude_fd);
+	const std::map<int, Client*>& members = channel.getMembers();
+	for (std::map<int, Client*>::const_iterator it = members.begin(); it != members.end(); ++it) {
+		if (it->first == exclude_fd)
+			continue;
+		m_server.enablePolloutForFD(it->first);
+	}
 }
 
 /**
@@ -263,7 +280,7 @@ void CommandHandler::handleNick(Client& client, const Message& msg) {
 			if (chan && chan->isMember(client.getFD()))
 			{
 				// exclude sender
-				chan->broadcast(nick_change, client.getFD());
+				broadcastToChannel(*chan, nick_change, client.getFD());
 			}
 		}
 		std::cout << "Nick change broadcast: " << old_nick << " -> " << new_nick << "\n";
@@ -389,7 +406,7 @@ void CommandHandler::handleQuit(Client& client, const Message& msg)
 			Channel* chan = it->second.get();
 			if (chan && chan->isMember(client.getFD())) {
 				// Broadcast QUIT to all members of this channel
-				chan->broadcast(quit_msg);
+				broadcastToChannel(*chan, quit_msg);
 				// Remove client from channel
 				chan->removeMember(client.getFD());
 
@@ -472,7 +489,7 @@ void CommandHandler::handlePrivmsg(Client& client, const Message& msg)
 		);
 
 		// Broadcast to all channel memers except sender
-		chan->broadcast(privmsg, client.getFD());
+		broadcastToChannel(*chan, privmsg, client.getFD());
 
 		std::cout << "PRIVMSG from " << client.getNickname()
 					<< " to channel " << target << ": " << message << "\n";
@@ -718,7 +735,7 @@ void CommandHandler::handleJoin(Client& client, const Message& msg) {
 	);
 
 	// Broadcast JOIN to all members (including sender)
-	chan->broadcast(join_msg);
+	broadcastToChannel(*chan, join_msg);
 
 	std::cout << client.getNickname() << " joined " << channel_name << "\n";
 
@@ -812,7 +829,7 @@ void CommandHandler::handlePart(Client& client, const Message& msg) {
 	);
 
 	// Broadcast PART to all channel members (including sender)
-	chan->broadcast(part_msg);
+	broadcastToChannel(*chan, part_msg);
 
 	std::cout << client.getNickname() << " left " << channel_name;
 	if (!reason.empty())
@@ -913,7 +930,7 @@ void CommandHandler::handleKick(Client& client, const Message& msg) {
 	);
 
 	// Broadcast KICK to all channel members (including kicked user)
-	chan->broadcast(kick_msg);
+	broadcastToChannel(*chan, kick_msg);
 
 	std::cout << client.getNickname() << " kicked " << target_nick
 				<< " from " << channel_name << " (" << reason << ")\n";
@@ -1119,7 +1136,7 @@ void CommandHandler::handleTopic(Client& client, const Message& msg) {
 		);
 
 		// Broadcast TOPIC change to all channel members
-		chan->broadcast(topic_msg);
+		broadcastToChannel(*chan, topic_msg);
 
 		std::cout << client.getNickname() << " set topic for "
 					<< channel_name << ": " << new_topic << "\n";
@@ -1554,7 +1571,7 @@ void CommandHandler::handleChannelMode(Client& client, const Message& msg, const
 		);
 		
 		// Broadcast to all channel members (including sender)
-		chan->broadcast(mode_msg);
+		broadcastToChannel(*chan, mode_msg);
 	}
 }
 
