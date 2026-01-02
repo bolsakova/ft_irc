@@ -37,6 +37,7 @@ class CommandHandler {
 			void	handleInvite(Client& client, const Message& msg);
 			void	handleTopic(Client& client, const Message& msg);
 			void	handleMode(Client& client, const Message& msg);
+			void	handleCap(Client& client, const Message& msg);
 			
 			// validation helpers
 			bool	isNicknameInUse(const std::string& nickname, int exclude_fd = -1);

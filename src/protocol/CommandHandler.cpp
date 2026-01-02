@@ -252,6 +252,19 @@ void CommandHandler::handleNick(Client& client, const Message& msg) {
 		std::string nick_change = ":" + old_nick + "!" + client.getUsername() +
 									"@localhost NICK :" + new_nick + "\r\n";
 		sendReply(client, nick_change);
+
+		// Broadcast nick change to all channels where user is a member
+		const std::map<std::string, std::unique_ptr<Channel>>& channels = m_server.getChannels();
+		for (std::map<std::string, std::unique_ptr<Channel>>::const_iterator it = channels.begin();
+			it != channels.end(); ++it)
+		{
+			Channel* chan = it->second.get();
+			if (chan && chan->isMember(client.getFD()))
+			{
+				// exclude sender
+				chan->broadcast(nick_change, client.getFD());
+			}
+		}
 	}
 	
 	// Check if client can now be registered
@@ -364,6 +377,9 @@ void CommandHandler::handleQuit(Client& client, const Message& msg)
 
 		// Get all channels and broadcast QUIT to channels where client is a member
 		const std::map<std::string, std::unique_ptr<Channel>>& channels = m_server.getChannels();
+		
+		// Collect empty channels to remove (can't modify map while iterating)
+		std::vector<std::string> channels_to_remove;
 
 		for (std::map<std::string, std::unique_ptr<Channel>>::const_iterator it = channels.begin();
 			it != channels.end(); ++it)
@@ -374,7 +390,17 @@ void CommandHandler::handleQuit(Client& client, const Message& msg)
 				chan->broadcast(quit_msg);
 				// Remove client from channel
 				chan->removeMember(client.getFD());
+
+				// Mark for cleanup if empty
+				if (chan->isEmpty())
+					channels_to_remove.push_back(it->first);
 			}
+		}
+		// Clean up empty channels
+		for (size_t i = 0; i < channels_to_remove.size(); ++i)
+		{
+			m_server.removeChannel(channels_to_remove[i]);
+			std::cout << "Channel " << channels_to_remove[i] << " removed (empty after QUIT)\n";
 		}
 	}
 	
@@ -542,8 +568,6 @@ void CommandHandler::handleJoin(Client& client, const Message& msg) {
 				sendError(client, ERR_INVITEONLYCHAN, channel_name, "Cannot join channel (+i)");
 				return;
 			}
-			// Remove from invited list after successful join
-			chan->removeInvited(client.getFD());
 		}
 
 		// Check +k (channel key)
@@ -567,6 +591,10 @@ void CommandHandler::handleJoin(Client& client, const Message& msg) {
 
 	// Add client to channel
 	chan->addMember(&client);
+
+	// Remove from invited list after successful join
+	if (chan->isInvited(client.getFD()))
+		chan->removeInvited(client.getFD());
 
 	// Build JOIN message
 	// Format: :nick!user@host JOIN :#channel
@@ -681,6 +709,13 @@ void CommandHandler::handlePart(Client& client, const Message& msg) {
 
 	// Remove client from channel
 	chan->removeMember(client.getFD());
+
+	// Clean up empty channel
+	if (chan->isEmpty())
+	{
+		m_server.removeChannel(channel_name);
+		std::cout << "Channel " << channel_name << " removed (empty after PART)\n";
+	}
 }
 
 /**
@@ -773,6 +808,13 @@ void CommandHandler::handleKick(Client& client, const Message& msg) {
 
 	// Remove target from channel
 	chan->removeMember(target_fd);
+
+	// Clean up empty channel
+	if (chan->isEmpty())
+	{
+		m_server.removeChannel(channel_name);
+		std::cout << "Channel " << channel_name << " removed (empty after KICK)\n";
+	}
 }
 
 /**
@@ -1280,6 +1322,19 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 	}
 }
 
+void CommandHandler::handleCap(Client& client, const Message& msg) {
+	if (msg.params.empty())
+		return;
+	if (msg.params[0] == "LS")
+	{
+		// empty list of capabilities
+		sendReply(client, ":ircserv CAP * LS :\r\n");
+	}
+	else if (msg.params[0] == "END") {
+		// Client finishes negotiation - nothing to do
+	};
+}
+
 /**
  * @brief Main command dispatcher - routes commands to appropriate handlers.
  * @param raw_command Complete IRC command with \r\n
@@ -1317,6 +1372,8 @@ void CommandHandler::handleCommand(const std::string& raw_command, Client& clien
 			handleTopic(client, msg);
 		else if (msg.command == "MODE")
 			handleMode(client, msg);
+		else if (msg.command == "CAP")
+			handleCap(client, msg);
 		else {
 			// Command not recognized or not implemented
 			std::string error = MessageBuilder::buildErrorReply(
