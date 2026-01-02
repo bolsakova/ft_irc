@@ -23,7 +23,8 @@ Client::Client(int fd)
 	  m_registered(false),
 	  m_peer_closed(false),
 	  m_should_disconnect(false), // init disconnect flag as false
-	  m_quit_reason("") // no quit reason until requested
+	  m_quit_reason(""), // no quit reason until requested
+	  m_user_modes("")    // user modes start empty
 {}
 
 Client::~Client() {}
@@ -119,3 +120,34 @@ bool Client::shouldDisconnect() const{return m_should_disconnect;}
 //Get disconnection reason (for logging/notifications), return Quit reason string
 const std::string& Client::getQuitReason() const{return m_quit_reason;}
 
+/**
+ * @brief Set or unset a user mode
+ * @param mode Mode character (i, o, w, etc.)
+ * @param add True to add mode, false to remove
+ */
+void Client::setUserMode(char mode, bool add)
+{
+	if (add)
+	{
+		// Add mode if not already present
+		if (m_user_modes.find(mode) == std::string::npos)
+			m_user_modes += mode;
+	}
+	else
+	{
+		// Remove mode if present
+		size_t pos = m_user_modes.find(mode);
+		if (pos != std::string::npos)
+			m_user_modes.erase(pos, 1);
+	}
+}
+
+/**
+ * @brief Check if user has a specific mode
+ * @param mode Mode character to check
+ * @return True if user has the mode
+ */
+bool Client::hasUserMode(char mode) const
+{
+	return m_user_modes.find(mode) != std::string::npos;
+}
