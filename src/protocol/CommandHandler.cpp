@@ -1034,8 +1034,125 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 		return;
 	}
 
-	std::string channel_name = msg.params[0];
+	std::string target = msg.params[0];
 
+	// Check if target is a channel or user
+    if (!target.empty() && (target[0] == '#' || target[0] == '&'))
+    {
+        // CHANNEL MODE
+        handleChannelMode(client, msg, target);
+    }
+    else
+    {
+        // USER MODE
+        handleUserMode(client, msg, target);
+    }
+}
+
+/**
+ * @brief Handle user MODE command
+ * Format: MODE <nickname> [+/-modes]
+ */
+void CommandHandler::handleUserMode(Client& client, const Message& msg, const std::string& target) {
+	// User can only set modes for themselves
+	if (target != client.getNickname())
+	{
+		sendError(client, ERR_USERSDONTMATCH, "", "Cannot change mode for other users");
+		return;
+	}
+
+	// MODE viewing (no mode string provided)
+	if (msg.params.size() == 1)
+	{
+		// Show current user modes
+		std::string modes = client.getUserModes();
+		if (modes.empty())
+			modes = "+";
+		else
+			modes = "+" + modes;
+
+		sendNumeric(client, RPL_UMODEIS, modes);
+		return;
+	}
+
+	// MODE changing
+	std::string mode_string = msg.params[1];
+    char action = '+';
+    std::string applied_modes;
+    char current_action = '\0';
+
+	for (size_t i = 0; i < mode_string.length(); ++i)
+	{
+		char c = mode_string[i];
+
+		// Handle action switches
+        if (c == '+' || c == '-')
+        {
+            action = c;
+            continue;
+        }
+
+		// Process mode character
+		if (c == 'i')
+		{
+			// Invisible mode
+			bool new_state = (action == '+');
+			if (client.hasUserMode('i') != new_state)
+            {
+                client.setUserMode('i', new_state);
+                
+                // Add to applied modes
+                if (current_action != action)
+                {
+                    applied_modes += action;
+                    current_action = action;
+                }
+                applied_modes += 'i';
+            }
+		}
+		else if (c == 'o')
+		{
+			// Operator mode - can only be removed, not added by user
+			if (action == '-')
+			{
+				if (client.hasUserMode('o'))
+				{
+					client.setUserMode('o', false);
+					
+					// Add to applied modes
+					if (current_action != action)
+					{
+						applied_modes += action;
+						current_action = action;
+					}
+					applied_modes += 'o';
+				}
+			}
+			// Ignore +o (users can't make themselves operators)
+		}
+		else
+		{
+			// Unknown mode - ignore or send error
+            sendError(client, ERR_UMODEUNKNOWNFLAG, "", "Unknown MODE flag");
+		}
+	}
+
+	// Send confirmation if any modes were changed
+	if (!applied_modes.empty())
+    {
+        std::string mode_msg = ":" + client.getNickname() + " MODE " +
+                              client.getNickname() + " :" + applied_modes + "\r\n";
+        sendReply(client, mode_msg);
+        
+        std::cout << client.getNickname() << " set user modes: " << applied_modes << "\n";
+    }
+}
+
+/**
+ * @brief Handle channel MODE command
+ * Format: MODE <channel> [+/-modes] [parameters]
+ */
+void CommandHandler::handleChannelMode(Client& client, const Message& msg, const std::string& channel_name) {
 	// Validate channel exists
 	Channel* chan = m_server.findChannel(channel_name);
 	if (!chan)

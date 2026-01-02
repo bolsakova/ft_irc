@@ -40,6 +40,10 @@ class CommandHandler {
 			void	handleCap(Client& client, const Message& msg);
 			void	handleWho(Client& client, const Message& msg);
 			
+			// MODE helpers
+			void	handleUserMode(Client& client, const Message& msg, const std::string& target);
+			void	handleChannelMode(Client& client, const Message& msg, const std::string& channel_name);
+
 			// validation helpers
 			bool	isNicknameInUse(const std::string& nickname, int exclude_fd = -1);
 			bool	isValidNickname(const std::string& nickname);
