@@ -19,20 +19,17 @@ class Client
 {
 	private:
 		int			m_fd;
-		std::string	m_inbuf;
-		std::string	m_outbuf;
+		std::string	m_inbuf;    // Partial commands
+		std::string	m_outbuf;   // Data to send
 		// IRC protocol state
 		std::string m_nickname;
 		std::string m_username;
 		std::string m_realname;
 		bool 		m_authenticated;
 		bool 		m_registered;
-		// peer closed its write side (recv returned 0)
-		bool		m_peer_closed;
-		// вisconnect management
+		bool		m_peer_closed;       // peer closed its write side (recv returned 0)
 		bool        m_should_disconnect; // Should server disconnect this client?
 		std::string m_quit_reason;       // Reason for disconnection (for QUIT)
-
 	
 	public:
 		// deleted OCF methods (canonical but disabled): Client manages a unique fd
@@ -78,6 +75,8 @@ class Client
 		void markForDisconnect(const std::string& reason);
 		bool shouldDisconnect() const;
 		const std::string& getQuitReason() const;
-};
 
+		// Additional helper to clear input buffer (if needed) 30.12.2025
+		// void clearInBuf() { m_inbuf.clear(); }
+};
 #endif

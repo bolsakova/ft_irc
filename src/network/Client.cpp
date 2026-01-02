@@ -54,18 +54,31 @@ bool Client::isRegistered() const{return m_registered;}
 
 void Client::appendToInBuf(const std::string &data){m_inbuf += data;}
 
-// =  IRC строго конец команды это "\r\n" =
-bool Client::hasCompleteCmd() const{return (m_inbuf.find("\r\n") != std::string::npos);}
+// Accept either CRLF or bare LF as command terminators (helps with netcat/manual testing)
+bool Client::hasCompleteCmd() const
+{
+	return m_inbuf.find("\r\n") != std::string::npos ||
+		   m_inbuf.find('\n')   != std::string::npos;
+}
 
 std::string Client::extractNextCmd()
 {
-	// режем по "\r\n", не по '\n'
+	// Prefer CRLF; fallback to lone LF to be forgiving for manual clients
 	std::size_t pos = m_inbuf.find("\r\n");
+	std::size_t len = 2;
+	if (pos == std::string::npos)
+	{
+		pos = m_inbuf.find('\n');
+		len = 1;
+	}
 	if (pos == std::string::npos)
 		return "";
 
 	std::string line = m_inbuf.substr(0, pos);
-	m_inbuf.erase(0, pos + 2); // +2 because "\r\n" is 2 chars
+	// Trim trailing '\r' if the delimiter was just '\n'
+	if (len == 1 && !line.empty() && line[line.size() - 1] == '\r')
+		line.erase(line.size() - 1, 1);
+	m_inbuf.erase(0, pos + len);
 	return line;
 }
 
@@ -105,5 +118,4 @@ bool Client::shouldDisconnect() const{return m_should_disconnect;}
 		
 //Get disconnection reason (for logging/notifications), return Quit reason string
 const std::string& Client::getQuitReason() const{return m_quit_reason;}
-
 

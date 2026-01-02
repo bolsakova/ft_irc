@@ -1,4 +1,4 @@
-NAME = ft_irc
+NAME = ircserv #subject
 
 CXX = c++
 CXXFLAGS = -Wall -Wextra -Werror -std=c++17 #-std=c++98
@@ -19,10 +19,11 @@ TESTDIR = tests
 NETWORK_SRCS = $(shell find src/network -name '*.cpp')
 PROTOCOL_SRCS = $(shell find src/protocol -name '*.cpp')
 
-TEST_SRCS = tests/test_commands.cpp #test_builder.cpp #test_parser.cpp
+# test run manually if needed
+# TEST_SRCS = tests/test_commands.cpp #test_builder.cpp #test_parser.cpp
 
 # All sources
-SRCS = $(NETWORK_SRCS) $(PROTOCOL_SRCS) $(TEST_SRCS)
+SRCS = main.cpp $(NETWORK_SRCS) $(PROTOCOL_SRCS)
 
 # Object files with subdirectory structure
 OBJS = $(SRCS:%.cpp=$(OBJDIR)/%.o)

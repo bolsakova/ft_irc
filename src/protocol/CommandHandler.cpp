@@ -1152,6 +1152,7 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 			{
 				// Operator privileges mode
 				// Need nickname parameter for both + and -
+				std::string target_nick;
 				if (param_index < msg.params.size())
 				{
 					std::string target_nick = msg.params[param_index++];
