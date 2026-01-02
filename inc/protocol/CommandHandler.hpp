@@ -39,6 +39,7 @@ class CommandHandler {
 			void	handleMode(Client& client, const Message& msg);
 			void	handleCap(Client& client, const Message& msg);
 			void	handleWho(Client& client, const Message& msg);
+			void	handleNotice(Client& client, const Message& msg);
 			
 			// MODE helpers
 			void	handleUserMode(Client& client, const Message& msg, const std::string& target);
