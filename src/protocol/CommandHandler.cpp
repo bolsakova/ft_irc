@@ -265,6 +265,7 @@ void CommandHandler::handleNick(Client& client, const Message& msg) {
 				chan->broadcast(nick_change, client.getFD());
 			}
 		}
+		std::cout << "Nick change broadcast: " << old_nick << " -> " << new_nick << "\n";
 	}
 	
 	// Check if client can now be registered
@@ -1322,17 +1323,45 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 	}
 }
 
+/**
+ * @brief Handle CAP command - capability negotiation
+ * Format: CAP <subcommand> [:<capabilities>]
+ * 
+ * Miminal implementation for irssi compatibility.
+ * We don't support any capabilities, just acknowledge the negotiation.
+ */
 void CommandHandler::handleCap(Client& client, const Message& msg) {
+	// CAP command doesn't require registration
 	if (msg.params.empty())
 		return;
-	if (msg.params[0] == "LS")
+	
+	std::string subcommand = msg.params[0];
+
+	if (subcommand == "LS")
 	{
-		// empty list of capabilities
-		sendReply(client, ":ircserv CAP * LS :\r\n");
+		// Client requests list of capabilities
+		std::string cap_reply = ":ircserv CAP " + 
+                                (client.getNickname().empty() ? "*" : client.getNickname()) +
+                                " LS :\r\n";
+        sendReply(client, cap_reply);
+		std::cout << "Client fd " << client.getFD() << " CAP LS (empty list sent)\n";
 	}
-	else if (msg.params[0] == "END") {
-		// Client finishes negotiation - nothing to do
-	};
+	else if (subcommand == "END")
+	{
+		// Client finished capability negotiation
+		std::cout << "Client fd " << client.getFD() << " CAP END\n";
+		// Nothing to do, client will continue with PASS/NICK/USER
+	}
+	else if (subcommand == "REQ")
+	{
+		// Client requests specific capabilities
+		// We support none, so send NAK (negative acknowledgement)
+		std::string cap_reply = ":ircserv CAP " + 
+                                (client.getNickname().empty() ? "*" : client.getNickname()) +
+                                " NAK :" + msg.trailing + "\r\n";
+		sendReply(client, cap_reply);
+		std::cout << "Client fd " << client.getFD() << " CAP REQ (rejected)\n";
+	}
 }
 
 /**
