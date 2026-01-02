@@ -46,8 +46,6 @@ class Server
 	// void receiveData(int fd);
 	bool receiveData(int fd);
 	void sendData(int fd);
-	void enablePolloutForFD(int fd);
-	void disablePolloutForFd(int fd);
 	void disconnectClient(int fd);
 	void cleanupDisconnectedClients();
 	
@@ -70,6 +68,8 @@ class Server
 	Channel* createChannel(const std::string& name);
 	void removeChannel(const std::string& name);
 	const std::map<std::string, std::unique_ptr<Channel>>& getChannels() const;
+	void enablePolloutForFD(int fd);
+	void disablePolloutForFd(int fd);
 
 };
 
