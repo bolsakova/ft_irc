@@ -141,8 +141,9 @@ void CommandHandler::sendWelcome(Client& client) {
 		"This server was created 2025-12-21");
 		
 	// RPL_MYINFO (004): Server name, version, and available modes
+	// Format: <servername> <version> <user modes> <channel modes>
 	sendNumeric(client, RPL_MYINFO,
-		m_server_name + " 1.0 o o");
+		m_server_name + " 1.0 io itkol");
 }
 
 /**
@@ -515,6 +516,116 @@ void CommandHandler::handlePrivmsg(Client& client, const Message& msg)
 		sendReply(*target_client, privmsg);
 
 		std::cout << "PRIVMSG from " << client.getNickname()
+					<< " to " << target << ": " << message << "\n";
+	}
+}
+
+/**
+ * @brief Handle NOTICE command - send notice to user or channel.
+ * Format: NOTICE <target> :<message>
+ * 
+ * Identical to PRIVMSG but used for automated messages.
+ * Important: Servers and clients MUST NOT auto-reply to NOTICE.
+ */
+void CommandHandler::handleNotice(Client& client, const Message& msg) {
+	// Check if client registered
+	if (!client.isRegistered())
+	{
+		// For NOTICE, we don't send errors (per RFC)
+		return;
+	}
+
+	// Check if target parameter was provided
+	if (msg.params.empty())
+	{
+		// No errors for NOTICE (per RFC)
+		return;
+	}
+
+	// Check if message text was provided
+	if (msg.trailing.empty())
+	{
+		// No error for NOTICE (per RFC)
+		return;
+	}
+
+	std::string target = msg.params[0];
+	std::string message = msg.trailing;
+
+	// Check if target is a channel (starts with #)
+	if (!target.empty() && target[0] == '#')
+	{
+		// Find channel
+		Channel* chan = m_server.findChannel(target);
+
+		if (!chan)
+		{
+			// No error for NOTICE (per RFC)
+			return;
+		}
+
+		// Check if sender is a member of the channel
+		if (!chan->isMember(client.getFD()))
+		{
+			// No error for NOTICE (per RFC)
+			return;
+		}
+
+		// Build NOTICE for channel
+		// Format: :sender!user@host NOTICE #channel :message
+		std::string prefix = client.getNickname() + "!" +
+							client.getUsername() + "@localhost";
+		std::vector<std::string> params;
+		params.push_back(target);
+
+		std::string notice = MessageBuilder::buildCommandMessage(
+			prefix, "NOTICE", params, message
+		);
+
+		// Broadcast to all channel members except sender
+		chan->broadcast(notice, client.getFD());
+
+		std::cout << "NOTICE from " << client.getNickname()
+					<< " to channel " << target << ": " << message << "\n";
+	}
+	else
+	{
+		// Target is a user nickname - find the user
+		const std::map<int, std::unique_ptr<Client>>& clients = m_server.getClients();
+		Client* target_client = nullptr;
+
+		for (std::map<int, std::unique_ptr<Client>>::const_iterator it = clients.begin();
+            it != clients.end(); ++it)
+		{
+			if (it->second->getNickname() == target)
+			{
+				target_client = it->second.get();
+				break;
+			}
+		}
+
+		// Check if targte user exists
+		if (!target_client)
+		{
+			// No error for NOTICE (per RFC)
+			return;
+		}
+
+		// Build NOTICE with sender prefix
+		// Format: :sender!user@host NOTICE target :message
+		std::string prefix = client.getNickname() + "!" +
+							client.getUsername() + "@localhost";
+		std::vector<std::string> params;
+		params.push_back(target);
+
+		std::string notice = MessageBuilder::buildCommandMessage(
+			prefix, "NOTICE", params, message
+		);
+
+		// Send to target user
+		sendReply(*target_client, notice);
+
+		std::cout << "NOTICE from " << client.getNickname()
 					<< " to " << target << ": " << message << "\n";
 	}
 }
@@ -1071,7 +1182,10 @@ void CommandHandler::handleUserMode(Client& client, const Message& msg, const st
 		else
 			modes = "+" + modes;
 
-		sendNumeric(client, RPL_UMODEIS, modes);
+		// Send RPL_UMODEIS (221) - no colon before modes
+		std::string mode_reply = ":" + m_server_name + " 221 " +
+								client.getNickname() + " " + modes + "\r\n";
+		sendReply(client, mode_reply);
 		return;
 	}
 
@@ -1201,7 +1315,11 @@ void CommandHandler::handleChannelMode(Client& client, const Message& msg, const
 			modes = "+";
 		
 		// Send RPL_CHANNELMODEIS (324)
-		sendNumeric(client, RPL_CHANNELMODEIS, channel_name + " " + modes + mode_params);
+		// Send RPL_CHANNELMODEIS (324) - no colon before channel
+		std::string mode_reply = ":" + m_server_name + " 324 " +
+								client.getNickname() + " " +
+								channel_name + " " + modes + mode_params + "\r\n";
+		sendReply(client, mode_reply);
 		return;
 	}
 
@@ -1600,6 +1718,8 @@ void CommandHandler::handleCommand(const std::string& raw_command, Client& clien
 			handleQuit(client, msg);
 		else if (msg.command == "PRIVMSG")
 			handlePrivmsg(client, msg);
+		else if (msg.command == "NOTICE")
+			handleNotice(client, msg);
 		else if (msg.command == "JOIN")
 			handleJoin(client, msg);
 		else if (msg.command == "PART")
