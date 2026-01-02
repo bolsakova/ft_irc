@@ -1153,51 +1153,53 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 				if (param_index < msg.params.size())
 				{
 					std::string target_nick = msg.params[param_index++];
-				}
-				
-				
-				// Find target user by nickname
-				Client* target = m_server.findClientByNickname(target_nick);
-				if (!target)
-				{
-					std::string error = MessageBuilder::buildErrorReply(
-						m_server_name, ERR_NOSUCHNICK,
-						client.getNickname(),
-						target_nick,
-						"No such nick/channel"
-					);
-					sendReply(client, error);
-					continue;
+					Client* target_client = nullptr;
+					int target_fd = -1;
 
-				}
+					const std::map<int, Client*>& members = chan->getMembers();
+					for (std::map<int, Client*>::const_iterator it = members.begin();
+                        it != members.end(); ++it)
+					{
+						if (it->second->getNickname() == target_nick)
+						{
+							target_client = it->second;
+							target_fd = it->first;
+							break;
+						}
+					}
 
-				// Check if target is on the channel
-				if (!chan->isMember(target->getFD()))
-				{
-					std::string error = MessageBuilder::buildErrorReply(
-						m_server_name, ERR_USERNOTINCHANNEL,
-						client.getNickname(),
-						target_nick + " " + channel_name,
-						"They aren't on that channel"
-					);
-					sendReply(client, error);
-					return;
+					if (target_client && chan->isMember(target_fd))
+					{
+						if (action == '+')
+						{
+							if (!chan->isOperator(target_fd))
+							{
+								chan->addOperator(target_fd);
+								if (current_action != action)
+								{
+									applied_modes += action;
+									current_action = action;
+								}
+								applied_modes += 'o';
+								applied_params.push_back(target_nick);
+							}
+						}
+						else
+						{
+							if (chan->isOperator(target_fd))
+							{
+								chan->removeOperator(target_fd);
+								if (current_action != action)
+								{
+									applied_modes += action;
+									current_action = action;
+								}
+								applied_modes += 'o';
+								applied_params.push_back(target_nick);
+							}
+						}
+					}
 				}
-
-				// Apply operator change
-				if (action == '+')
-					chan->addOperator(target->getFD());
-				else
-					chan->removeOperator(target->getFD());
-				
-				// Add to applied modes string
-				if (current_action != action)
-				{
-					applied_modes += action;
-					current_action = action;
-				}
-				applied_modes += 'o';
-				applied_params.push_back(target_nick);
 				break;
 			}
 			case 'l':
@@ -1206,39 +1208,26 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 				if (action == '+')
 				{
 					// Need limit parameter
-					if (param_index >= msg.params.size())
+					if (param_index < msg.params.size())
 					{
-						std::string error = MessageBuilder::buildErrorReply(
-							m_server_name, ERR_NEEDMOREPARAMS,
-							client.getNickname(),
-							"MODE",
-							"Not enough parameters"
-						);
-						sendReply(client, error);
-						continue;
+						std::string limit_str = msg.params[param_index++];
+		
+						// Convert string to int
+						std::istringstream iss(limit_str);
+						int new_limit;
+						if (iss >> new_limit && new_limit > 0)
+						{
+							chan->setUserLimit(new_limit);
+							// Add to applied modes string
+							if (current_action != action)
+							{
+								applied_modes += action;
+								current_action = action;
+							}
+							applied_modes += 'l';
+							applied_params.push_back(limit_str);
+						}
 					}
-
-					std::string limit_str = msg.params[param_index++];
-
-					// Convert string to int
-					int limit = 0;
-					std::istringstream iss(limit_str);
-					if (!(iss >> limit) || limit <= 0)
-					{
-						// Invalid limit - ignore
-						continue;
-					}
-
-					chan->setUserLimit(limit);
-
-					// Add to applied modes string
-					if (current_action != action)
-					{
-						applied_modes += action;
-						current_action = action;
-					}
-					applied_modes += 'l';
-					applied_params.push_back(limit_str);
 				}
 				else
 				{
@@ -1260,13 +1249,7 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 			{
 				// Unknown mode - send error
 				std::string unknown_mode(1, c);
-				std::string error = MessageBuilder::buildErrorReply(
-					m_server_name, ERR_UNKNOWNMODE,
-					client.getNickname(),
-					unknown_mode,
-					"is unknown mode char to me"
-				);
-				sendReply(client, error);
+				sendError(client, ERR_UNKNOWNMODE, unknown_mode, "is unknown mode char to me");
 				break;
 			}
 		}
