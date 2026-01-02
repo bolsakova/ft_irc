@@ -1150,9 +1150,21 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 			{
 				// Operator privileges mode
 				// Need nickname parameter for both + and -
+				std::string target_nick;
 				if (param_index < msg.params.size())
 				{
-					std::string target_nick = msg.params[param_index++];
+					target_nick = msg.params[param_index++];
+				}
+				else
+				{
+					std::string error = MessageBuilder::buildErrorReply(
+						m_server_name, ERR_NEEDMOREPARAMS,
+						client.getNickname(),
+						"MODE",
+						"Not enough parameters"
+					);
+					sendReply(client, error);
+					continue;
 				}
 				
 				
