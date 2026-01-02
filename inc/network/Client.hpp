@@ -30,6 +30,7 @@ class Client
 		bool		m_peer_closed;       // peer closed its write side (recv returned 0)
 		bool        m_should_disconnect; // Should server disconnect this client?
 		std::string m_quit_reason;       // Reason for disconnection (for QUIT)
+		std::string m_user_modes;        // User modes (i, o, w, etc.)
 	
 	public:
 		// deleted OCF methods (canonical but disabled): Client manages a unique fd
@@ -78,5 +79,10 @@ class Client
 
 		// Additional helper to clear input buffer (if needed) 30.12.2025
 		// void clearInBuf() { m_inbuf.clear(); }
+
+		// User mode management
+		const std::string& getUserModes() const { return m_user_modes; }
+		void setUserMode(char mode, bool add);
+		bool hasUserMode(char mode) const;
 };
 #endif
