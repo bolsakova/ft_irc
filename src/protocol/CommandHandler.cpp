@@ -1365,6 +1365,100 @@ void CommandHandler::handleCap(Client& client, const Message& msg) {
 }
 
 /**
+ * @brief Handle WHO command - list users in channel or matching pattern
+ * Format: WHO <channel|mask>
+ * 
+ * Returns information about users in a channel or matching a pattern.
+ * Used by irssi to query channel members.
+ */
+void CommandHandler::handleWho(Client& client, const Message& msg) {
+	// Check if client is registered
+    if (!client.isRegistered())
+    {
+        sendError(client, ERR_NOTREGISTERED, "", "You have not registered");
+        return;
+    }
+
+    // Check if parameter was provided
+    if (msg.params.empty())
+    {
+        sendError(client, ERR_NEEDMOREPARAMS, "WHO", "Not enough parameters");
+        return;
+    }
+
+	std::string target = msg.params[0];
+
+	// Check if target is a channel
+	if (!target.empty() && target[0] == '#')
+	{
+		// Find channel
+		Channel* chan = m_server.findChannel(target);
+
+		if (!chan)
+		{
+			// Channel doesn't exist - send end of WHO with no entries
+			sendNumeric(client, RPL_ENDOFWHO, target + " :End of WHO list");
+			return;
+		}
+
+		// Send RPL_WHOREPLY for each member in the channel
+		const std::map<int, Client*>& members = chan->getMembers();
+
+		for (std::map<int, Client*>::const_iterator it = members.begin();
+			it != members.end(); ++it)
+		{
+			Client* member = it->second;
+
+			// Build WHO reply
+            // Format: :server 352 nick <channel> <user> <host> <server> <nick> <flags> :<hopcount> <realname>
+            // Flags: H = here, G = gone (away), @ = operator, + = voice
+            std::string flags = "H";	// H = here (not away)
+            if (chan->isOperator(member->getFD()))
+                flags += "@";
+            
+            std::string who_msg = ":" + m_server_name + " 352 " +
+                            	client.getNickname() + " " +
+                                target + " " +						// channel (no colon!)
+                                member->getUsername() + " " +
+                                "localhost" + " " +
+                                m_server_name + " " +
+                                member->getNickname() + " " +
+                                flags + " :0 " +					// colon before hopcount
+                                member->getRealname() + "\r\n";	// realname
+            sendReply(client, who_msg);
+		}
+		
+		// Send end of WHO list
+		sendNumeric(client, RPL_ENDOFWHO, target + " :End of WHO list");
+		std::cout << client.getNickname() << " queried WHO for " << target << "\n";
+	}
+	else
+	{
+		// Target is a nickname or mask
+		// For simplicity, we'll just check if it matches a specific user
+		Client* target_client = m_server.findClientByNickname(target);
+
+		if (target_client && target_client->isRegistered())
+		{
+			// Send WHO reply for single user
+			std::string who_msg = ":" + m_server_name + " 352 " +
+                                client.getNickname() + " " +
+                                target + " " +						// name (no colon!)
+                                target_client->getUsername() + " " +
+                                "localhost" + " " +
+                                m_server_name + " " +
+                                target_client->getNickname() + " " +
+                                "H :0 " +							// colon before hopcount
+                                target_client->getRealname() + "\r\n";
+			sendReply(client, who_msg);
+		}
+		// Send end of WHO list
+		sendNumeric(client, RPL_ENDOFWHO, target + " :End of WHO list");
+		std::cout << client.getNickname() << " queried WHO for " << target << "\n";
+	}
+}
+
+/**
  * @brief Main command dispatcher - routes commands to appropriate handlers.
  * @param raw_command Complete IRC command with \r\n
  * @param client Client who sent the command
@@ -1403,6 +1497,8 @@ void CommandHandler::handleCommand(const std::string& raw_command, Client& clien
 			handleMode(client, msg);
 		else if (msg.command == "CAP")
 			handleCap(client, msg);
+		else if (msg.command == "WHO")
+			handleWho(client, msg);
 		else {
 			// Command not recognized or not implemented
 			std::string error = MessageBuilder::buildErrorReply(
