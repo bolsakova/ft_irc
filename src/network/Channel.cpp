@@ -12,6 +12,7 @@
 
 #include "../../inc/network/Channel.hpp"
 #include "../../inc/network/Client.hpp"
+#include <iostream>
 
 // Конструктор по умолчанию: создаем пустой канал с выключенными режимами.
 // Имя/топик/ключ пусты, списки участников/операторов/приглашенных — пустые.
@@ -146,11 +147,17 @@ void Channel::removeInvited(int fd){m_invited.erase(fd);}
 // Рассылаем сообщение всем участникам, опционально исключая отправителя по fd.
 void Channel::broadcast(const std::string& message, int exclude_fd)
 {
-	for (std::map<int, Client*>::iterator it = m_members.begin(); it != m_members.end(); ++it)
-	{
-		if (it->first == exclude_fd)
-			continue;
-		if (it->second)
-			it->second->appendToOutBuf(message);
-	}
+	std::cout << "Broadcasting to " << m_members.size() << " members" << std::endl;
+    for (std::map<int, Client*>::iterator it = m_members.begin();
+         it != m_members.end(); ++it)
+    {
+        if (it->first == exclude_fd) {
+            std::cout << "  Skipping fd " << it->first << std::endl;
+            continue;
+        }
+        
+        std::cout << "  Sending to fd " << it->first << " (" 
+                  << it->second->getNickname() << ")" << std::endl;
+        it->second->appendToOutBuf(message);
+    }
 }

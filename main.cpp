@@ -1,6 +1,7 @@
 #include "inc/network/Server.hpp"
 #include <iostream>
 #include <cstdlib>
+#include <csignal>
 
 // Global server pointer for signal handler
 Server* g_server = NULL;

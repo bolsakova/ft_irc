@@ -1155,7 +1155,7 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 				std::string target_nick;
 				if (param_index < msg.params.size())
 				{
-					std::string target_nick = msg.params[param_index++];
+					target_nick = msg.params[param_index++];
 					Client* target_client = nullptr;
 					int target_fd = -1;
 
