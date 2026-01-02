@@ -12,6 +12,7 @@
 class Server;
 
 /**
+ * @file CommandHandler.hpp
  * @brief IRC command dispatcher and handler
  * 
  * Routes parsed IRC messages to appropriate handler functions
@@ -19,11 +20,11 @@ class Server;
  */
 class CommandHandler {
 	private:
-			Server&	m_server;					// reference to server for client access
-			const	std::string& m_password;	// server password for authentication
-			const	std::string m_server_name;	// server name for replies
+			Server&	m_server;
+			const	std::string& m_password;
+			const	std::string m_server_name;
 
-			// commands to handle
+			// IRC command handler
 			void	handlePass(Client& client, const Message& msg);
 			void	handleNick(Client& client, const Message& msg);
 			void	handleUser(Client& client, const Message& msg);
@@ -36,11 +37,13 @@ class CommandHandler {
 			void	handleInvite(Client& client, const Message& msg);
 			void	handleTopic(Client& client, const Message& msg);
 			void	handleMode(Client& client, const Message& msg);
-			// necessary checks
+			
+			// validation helpers
 			bool	isNicknameInUse(const std::string& nickname, int exclude_fd = -1);
 			bool	isValidNickname(const std::string& nickname);
 			bool	isValidChannelName(const std::string& name);
 
+			// response helpers
 			void sendWelcome(Client& client);
 			void sendReply(Client& client, const std::string& reply);
 			void sendError(Client& client, int error_code, const std::string& param, const std::string& message);

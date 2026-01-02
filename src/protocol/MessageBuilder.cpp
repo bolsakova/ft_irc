@@ -1,3 +1,11 @@
+/**
+ * @file MessageBuilder.cpp
+ * @brief IRC message builder implementation
+ * 
+ * Implements Message helper methods and MessageBuilder static functions
+ * for constructing RFC 1459 compliant server responses.
+ */
+
 #include "../../inc/protocol/MessageBuilder.hpp"
 
 /**
@@ -69,12 +77,6 @@ void MessageBuilder::validateLength(const std::string& message) {
  * 
  * Format: :<server> <code> <target> :<message>\r\n
  * Example: ":ircserv 001 tanja :Welcome to the IRC Network\r\n"
- * 
- * Used for server replies:
- * - RPL_WELCOME (001) - welcome message
- * - RPL_YOURHOST (002) - host information
- * - RPL_CREATED (003) - server creation date
- * - RPL_MYINFO (004) - server information
  */
 std::string MessageBuilder::buildNumericReply(const std::string& server, int code, const std::string& target, const std::string& message) {
 	std::string result;
@@ -117,12 +119,6 @@ std::string MessageBuilder::buildNumericReply(const std::string& server, int cod
  * 
  * Format: :<server> <code> <target> <param> :<message>\r\n
  * Example: ":ircserv 433 * tanja :Nickname is already in use\r\n"
- * 
- * Used for error replies:
- * - ERR_NOSUCHNICK (401) - no such nickname exists
- * - ERR_NOSUCHCHANNEL (403) - no such channel exists
- * - ERR_NICKNAMEINUSE (433) - nickname is already taken
- * - ERR_NEEDMOREPARAMS (461) - command requires more parameters
  */
 std::string MessageBuilder::buildErrorReply(const std::string& server, int code, const std::string& target, const std::string& param, const std::string& message) {
 	std::string result;

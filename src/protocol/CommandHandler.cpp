@@ -1,11 +1,10 @@
 /**
- * CommandHandler.cpp
+ * @file CommandHandler.cpp
+ * @brief IRC command handler implementation
  * 
- * IRC command dispatcher and handler implementation.
- * Routes parsed messages to appropriate command handlers (PASS, NICK, USER,
- * PING, QUIT, PRIVMSG, JOIN, PART, KICK, INVITE, TOPIC, MODE).
- * 
- * RFC 1459: https://tools.ietf.org/html/rfc1459
+ * Implements all IRC command handlers (PASS, NICK, USER, PING, QUIT, PRIVMSG,
+ * JOIN, PART, KICK, INVITE, TOPIC, MODE) and validation/response helpers
+ * according to RFC 1459 specifications.
  */
 
 #include "../../inc/protocol/CommandHandler.hpp"
@@ -18,11 +17,6 @@
  * 
  * @param server Reference to the main server instance
  * @param password Server password that clients mut provide
- * 
- * Algorithm:
- * 			1. Store reference to server (for accessing client list)
- * 			2. Store reference to password (for PASS validation)
- * 			3. Set server name to "ircserv" (used in all replies)
  */
 CommandHandler::CommandHandler(Server& server, const std::string& password)
 	: m_server(server), m_password(password), m_server_name("ircserv")
@@ -30,7 +24,7 @@ CommandHandler::CommandHandler(Server& server, const std::string& password)
 }
 
 /**
- * Validate nickname according to RFC 1459 rules.
+ * @brief Validate nickname according to RFC 1459 rules.
  * 
  * @param nickname Nickname string to validate
  * @return true if valid, false otherwise
@@ -64,7 +58,7 @@ bool CommandHandler::isValidNickname(const std::string& nickname) {
 }
 
 /**
- * Check if a nickname is already in use by another client
+ * @brief Check if a nickname is already in use by another client.
  * Used to prevent duplicate nicknames on the server
  * 
  * @param nickname Nickname to check
@@ -87,12 +81,11 @@ bool CommandHandler::isNicknameInUse(const std::string& nickname, int exclude_fd
 		if (it->second->getNickname() == nickname)
 			return true;
 	}
-
 	return false;
 }
 
 /**
- * Validate channel name according to IRC rules
+ * @brief Validate channel name according to IRC rules.
  * 
  * @param name Channel name to validate
  * @return True if valid, false otherwise
@@ -127,7 +120,7 @@ bool CommandHandler::isValidChannelName(const std::string& name) {
 }
 
 /**
- * Send welcome messages (RPL_WELCOME through RPL_MYINFO) to client.
+ * @brief Send welcome messages (RPL_WELCOME through RPL_MYINFO) to client.
  * Called after successful registration (PASS + NICK + USER complete)
  * 
  * @param client Newly registered client
@@ -158,15 +151,18 @@ void CommandHandler::sendWelcome(Client& client) {
  * 
  * @param client Client to send reply to
  * @param reply Formatted IRC message (must end with \r\n)
- * 
- * Algorithm:
- * 			1. Call client.appendToOutBuf() to add reply to output queue
- * 			2. Server's poll() loop will detect POLLOUT and call sendData()
  */
 void CommandHandler::sendReply(Client& client, const std::string& reply) {
 	client.appendToOutBuf(reply);
 }
 
+/**
+ * @brief Send error reply to client
+ * @param client Target client
+ * @param error_code IRC error code (ERR_*)
+ * @param param Additional parameter (nickname, channel, command)
+ * @param message Error message text
+ */
 void CommandHandler::sendError(Client& client, int error_code, const std::string& param, const std::string& message) {
 	std::string target = client.getNickname().empty() ? "*" : client.getNickname();
 	std::string error = MessageBuilder::buildErrorReply(
@@ -175,6 +171,12 @@ void CommandHandler::sendError(Client& client, int error_code, const std::string
 	sendReply(client, error);
 }
 
+/**
+ * @brief Send numeric reply to client
+ * @param client Target client
+ * @param numeric_code IRC numeric code (RPL_*)
+ * @param message Reply message text
+ */
 void CommandHandler::sendNumeric(Client& client, int numeric_code, const std::string& message) {
 	std::string reply = MessageBuilder::buildNumericReply(
 		m_server_name, numeric_code, client.getNickname(), message
@@ -183,7 +185,7 @@ void CommandHandler::sendNumeric(Client& client, int numeric_code, const std::st
 }
 
 /**
- * Handle PASS command - authenticate client with server password.
+ * @brief Handle PASS command - authenticate client with server password.
  * Format: PASS <password>
  */
 void CommandHandler::handlePass(Client& client, const Message& msg) {
@@ -213,7 +215,7 @@ void CommandHandler::handlePass(Client& client, const Message& msg) {
 }
 
 /**
- * Handle NICK command - set or change client's nickname.
+ * @brief Handle NICK command - set or change client's nickname.
  * Format: NICK <nickname>
  */
 void CommandHandler::handleNick(Client& client, const Message& msg) {
@@ -264,7 +266,7 @@ void CommandHandler::handleNick(Client& client, const Message& msg) {
 }
 
 /**
- * Handle USER command - set username and realname.
+ * @brief Handle USER command - set username and realname.
  * Format: USER <username> <hostname> <servername> :<realname>
  */
 void CommandHandler::handleUser(Client& client, const Message& msg) {
@@ -304,7 +306,7 @@ void CommandHandler::handleUser(Client& client, const Message& msg) {
 }
 
 /**
- * Handle PING command - respond with PONG to keep connection alive.
+ * @brief Handle PING command - respond with PONG to keep connection alive.
  * Format: PING <token> or PING :<token>
  */
 void CommandHandler::handlePing(Client& client, const Message& msg)
@@ -339,7 +341,7 @@ void CommandHandler::handlePing(Client& client, const Message& msg)
 }
 
 /**
- * Handle QUIT command - disconnect cliet from server.
+ * @brief Handle QUIT command - disconnect cliet from server.
  * Format: QUIT [:<reason>]
  */
 void CommandHandler::handleQuit(Client& client, const Message& msg)
@@ -382,7 +384,7 @@ void CommandHandler::handleQuit(Client& client, const Message& msg)
 }
 
 /**
- * Handle PRIVMSG command - send private message to user or channel.
+ * @brief Handle PRIVMSG command - send private message to user or channel.
  * Format: PRIVMSG <target> :<message>
  */
 void CommandHandler::handlePrivmsg(Client& client, const Message& msg)
@@ -491,7 +493,7 @@ void CommandHandler::handlePrivmsg(Client& client, const Message& msg)
 }
 
 /**
- * Handle JOIN command - join or create a channel
+ * @brief Handle JOIN command - join or create a channel
  * Format: JOIN <channel> [key]
  */
 void CommandHandler::handleJoin(Client& client, const Message& msg) {
@@ -621,7 +623,7 @@ void CommandHandler::handleJoin(Client& client, const Message& msg) {
 }
 
 /**
- * Handle PART command - client leaves a channel
+ * @brief Handle PART command - client leaves a channel
  * Syntax: PART <channel> [<reason>]
  */
 void CommandHandler::handlePart(Client& client, const Message& msg) {
@@ -682,7 +684,7 @@ void CommandHandler::handlePart(Client& client, const Message& msg) {
 }
 
 /**
- * Handle KICK command - operator removes user from channel
+ * @brief Handle KICK command - operator removes user from channel
  * Format: KICK <channel> <user> [<reason>]
  */
 void CommandHandler::handleKick(Client& client, const Message& msg) {
@@ -774,7 +776,7 @@ void CommandHandler::handleKick(Client& client, const Message& msg) {
 }
 
 /**
- * Handle INVITE command - invite user to channel
+ * @brief Handle INVITE command - invite user to channel
  * Format: INVITE <nickname> <channel>
  */
 void CommandHandler::handleInvite(Client& client, const Message& msg) {
@@ -883,7 +885,7 @@ void CommandHandler::handleInvite(Client& client, const Message& msg) {
 }
 
 /**
- * Handle TOPIC command - view or change channel topic
+ * @brief Handle TOPIC command - view or change channel topic
  * Format: TOPIC <channel> [:<new topic>]
  */
 void CommandHandler::handleTopic(Client& client, const Message& msg) {
@@ -971,7 +973,7 @@ void CommandHandler::handleTopic(Client& client, const Message& msg) {
 }
 
 /**
- * Handle MODE command - view or change channel modes
+ * @brief Handle MODE command - view or change channel modes
  * Format: MODE <channel> [<+/-modes> [parameters...]]
  */
 void CommandHandler::handleMode(Client& client, const Message& msg) {

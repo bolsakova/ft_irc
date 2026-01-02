@@ -1,10 +1,21 @@
+/**
+ * @file Parser.cpp
+ * @brief IRC message parser implementation
+ * 
+ * Implements IRC message parsing logic according to RFC 1459 format:
+ * [:<prefix>] <command> [<params>] [:<trailing>]
+ */
+
 #include "../../inc/protocol/Parser.hpp"
 
 /**
  * @brief Remove \r\n from the end of string
  * 
+ * @param str Input string to process
+ * @return String without \r\n at the end
+ * 
  * IRC protocol requires each message to end with \r\n
- * We need to remove it before parsing
+ * We need to remove it before parsing.
  */
 std::string Parser::stripCRLF(const std::string& str) {
 	// Check if string is long enough to have \r\n
@@ -23,6 +34,9 @@ std::string Parser::stripCRLF(const std::string& str) {
 
 /**
  * @brief Extract prefix from IRC message
+ * 
+ * @param line Current line being processed (will be modified)
+ * @return Extracted prefix without ':' or empty string if no prefix
  * 
  * Prefix format: :servername or :nick[!user[@host]]
  * Must be at the beginning of the message
@@ -62,14 +76,14 @@ std::string Parser::extractPrefix(std::string& line) {
  * @throws std::invalid_argument if no command found
  */
 std::string Parser::extractCommand(std::string& line) {
-	// Step 1: Check if line is empty (no command = error)
+	// Check if line is empty (no command = error)
 	if (line.empty())
 		throw std::invalid_argument("IRC message must have a command");
 	
-	// Step 2: Find where command ends (first space or end of line)
+	// Find where command ends (first space or end of line)
 	size_t spacePos = line.find(' ');
 
-	// Step 3: Extract command
+	// Extract command
 	std::string command;
 	if (spacePos == std::string::npos) {
 		// No space found = command is the entire remaining line
@@ -81,7 +95,7 @@ std::string Parser::extractCommand(std::string& line) {
 		line = line.substr(spacePos + 1); // Remove command and space from line
 	}
 
-	// Step 4: Validate command is not empty (extra safety)
+	// Validate command is not empty (extra safety)
 	if (command.empty())
 		throw std::invalid_argument("Command cannot be empty");
 
@@ -148,16 +162,16 @@ Message Parser::parse(const std::string& raw) {
 	// Create empty message structure
 	Message	msg;
 
-	// Step 1: Remove \r\n from the end
+	// Remove \r\n from the end
 	std::string line = stripCRLF(raw);
 
-	// Step 2: Extract prefix if present
+	// Extract prefix if present
 	msg.prefix = extractPrefix(line);
 
-	// Step 3: Extract command (required)
+	// Extract command (required)
 	msg.command = extractCommand(line);
 
-	// Step 4: Extract parameters and trailing
+	// Extract parameters and trailing
 	extractParams(line, msg.params, msg.trailing);
 
 	return msg;
