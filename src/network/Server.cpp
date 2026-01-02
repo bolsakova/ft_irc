@@ -286,6 +286,23 @@ void Server::disablePolloutForFd(int fd)
 	}
 }
 
+void Server::cleanupDisconnectedClients()
+{
+	if (m_clients.empty())
+		return;
+
+	std::vector<int> to_disconnect;
+	to_disconnect.reserve(m_clients.size());
+	for (std::map<int, std::unique_ptr<Client>>::const_iterator it = m_clients.begin();
+		 it != m_clients.end(); ++it)
+	{
+		if (it->second->shouldDisconnect())
+			to_disconnect.push_back(it->first);
+	}
+	for (size_t i = 0; i < to_disconnect.size(); ++i)
+		disconnectClient(to_disconnect[i]);
+}
+
 // 2. Partial command handling — proper non-blocking receive loop
 bool Server::receiveData(int fd)
 {
@@ -348,80 +365,6 @@ bool Server::receiveData(int fd)
 	}
 	return true;
 }
-
-// /**
-// recv() reads data from the socket.
-// For a non-blocking socket:
-// - >0  → read this nb of bytes
-// - =0  → client closed the connection
-// - <0  → error (including EAGAIN/EWOULDBLOCK)
-// */
-// void Server::receiveData(int fd)
-// {
-// 	// read in a loop until EAGAIN/EWOULDBLOCK (better for performance and correctness)
-// 	// because poll() is level-triggered.
-// 	char buffer[4096];
-// 	ssize_t bytes_read;
-// 	while (true)
-// 	{
-// 		bytes_read = recv(fd, buffer, sizeof(buffer), 0);
-// 		if (bytes_read < 0)
-// 		{
-// 			if (errno == EAGAIN || errno == EWOULDBLOCK)
-// 				break; // no more data for now
-// 			// Any other error — log and disconnect
-// 			std::cerr << "recv() failed on fd " << fd << ": "
-// 					  << std::strerror(errno) << std::endl;
-// 			disconnectClient(fd);
-// 			return;
-// 		}
-// 		if (bytes_read == 0)
-// 		{
-// 			// peer closed input (EOF). We must NOT drop connection immediately
-// 			// if we still have data in outbuf to send (important for: printf | nc tests).
-// 			std::cout << "Client fd " << fd << " closed input (EOF).\n";
-// 			auto it = m_clients.find(fd);
-// 			if (it == m_clients.end())
-// 				return;
-// 			Client &client = *(it->second);
-// 			client.markPeerClosed();
-// 			// Stop reading: no more POLLIN. But keep POLLOUT to flush outbuf.
-// 			disable_pollevent(m_poll_fds, fd, POLLIN);
-// 			// If nothing to send - can close now
-// 			if (!client.hasDataToSend())
-// 				disconnectClient(fd);
-// 			return;
-// 		}
-// 		// Find client safely (do NOT use operator[] here).
-// 		auto it = m_clients.find(fd);
-// 		if (it == m_clients.end())
-// 			return; // client already removed
-// 		Client &client = *(it->second);
-// 		// Append received chunk to the input buffer
-// 		std::string data(buffer, static_cast<std::size_t>(bytes_read));
-// 		// proper overflow check with incoming chunk size
-// 		const std::size_t MAX_INBUF = 8192;
-// 		if (client.getInBuf().size() + data.size() > MAX_INBUF)
-// 		{
-// 			std::cerr << "Input buffer overflow for fd " << fd
-// 					  << " (limit " << MAX_INBUF << ")\n"; // keep \n escaped
-// 			disconnectClient(fd);
-// 			return;
-// 		}
-// 		client.appendToInBuf(data);
-// 		// Process all complete commands currently in buffer
-// 		while (client.hasCompleteCmd())
-// 		{
-// 			std::string cmd = client.extractNextCmd();
-// 			// std::cout << "Received command from fd " << fd << ": [" << cmd << "]\n"; //можно удалить если не нужно в аутпут
-// 			// Передаём команду в CommandHandler для обработки
-// 			m_cmd_handler->handleCommand(cmd, client);
-// 			// Если есть что отправить - включаем POLLOUT
-// 			if (client.hasDataToSend())
-// 				enablePolloutForFD(fd);
-// 		}
-// 	}
-// }
 
 const std::map<int, std::unique_ptr<Client>>& Server::getClients() const
 {
@@ -528,8 +471,7 @@ void Server::run()
                 }
             }
         }
-        //TODO Disconnect clients marked for removal
-        //cleanupDisconnectedClients();
+        cleanupDisconnectedClients();
     }
 }
 
