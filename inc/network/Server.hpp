@@ -49,6 +49,7 @@ class Server
 	void enablePolloutForFD(int fd);
 	void disablePolloutForFd(int fd);
 	void disconnectClient(int fd);
+	void cleanupDisconnectedClients();
 	
 	public:
 	// Deleted OCF methods (canonical but disabled)
