@@ -776,7 +776,10 @@ void CommandHandler::handleJoin(Client& client, const Message& msg) {
 	sendReply(client, names_reply);
 
 	// RPL_ENDOFNAMES (366): :server 366 nick #channel :End of /NAMES list
-	sendNumeric(client, RPL_ENDOFNAMES, channel_name + " :End of /NAMES list");
+	std::string endofnames = ":" + m_server_name + " 366 " +
+                        		client.getNickname() + " " +
+                        		channel_name + " :End of /NAMES list\r\n";
+	sendReply(client, endofnames);
 
 	// Send TOPIC if set
 	if (chan->hasTopic())
@@ -788,7 +791,12 @@ void CommandHandler::handleJoin(Client& client, const Message& msg) {
 		sendReply(client, topic_reply);
 	}
 	else
-		sendNumeric(client, RPL_NOTOPIC, channel_name + " :No topic is set");
+	{
+		std::string notopic = ":" + m_server_name + " 331 " +
+                        		client.getNickname() + " " +
+                        		channel_name + " :No topic is set\r\n";
+    	sendReply(client, notopic);
+	}
 }
 
 /**
