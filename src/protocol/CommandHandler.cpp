@@ -226,7 +226,19 @@ void CommandHandler::handlePass(Client& client, const Message& msg) {
 	if (password == m_password) {
 		client.setAuthenticated(true);
 		std::cout << "Client fd " << client.getFD() << " authenticated successfully\n";
-	} else {
+
+		// Check if client can now be registered
+		// Registration requires: authenticated + nickname + username
+		if (!client.isRegistered() && client.isAuthenticated() &&
+			!client.getNickname().empty() && !client.getUsername().empty()) 
+		{
+			client.setRegistered(true);
+			sendWelcome(client);
+			std::cout << "Client fd " << client.getFD() << " is now fully registered\n";
+		}
+	}
+	else
+	{
 		sendError(client, ERR_PASSWDMISMATCH, "", "Password incorrect");
 		std::cout << "Client fd " << client.getFD() << " authentication failed\n";
 	}
