@@ -226,7 +226,19 @@ void CommandHandler::handlePass(Client& client, const Message& msg) {
 	if (password == m_password) {
 		client.setAuthenticated(true);
 		std::cout << "Client fd " << client.getFD() << " authenticated successfully\n";
-	} else {
+
+		// Check if client can now be registered
+		// Registration requires: authenticated + nickname + username
+		if (!client.isRegistered() && client.isAuthenticated() &&
+			!client.getNickname().empty() && !client.getUsername().empty()) 
+		{
+			client.setRegistered(true);
+			sendWelcome(client);
+			std::cout << "Client fd " << client.getFD() << " is now fully registered\n";
+		}
+	}
+	else
+	{
 		sendError(client, ERR_PASSWDMISMATCH, "", "Password incorrect");
 		std::cout << "Client fd " << client.getFD() << " authentication failed\n";
 	}
@@ -764,7 +776,10 @@ void CommandHandler::handleJoin(Client& client, const Message& msg) {
 	sendReply(client, names_reply);
 
 	// RPL_ENDOFNAMES (366): :server 366 nick #channel :End of /NAMES list
-	sendNumeric(client, RPL_ENDOFNAMES, channel_name + " :End of /NAMES list");
+	std::string endofnames = ":" + m_server_name + " 366 " +
+                        		client.getNickname() + " " +
+                        		channel_name + " :End of /NAMES list\r\n";
+	sendReply(client, endofnames);
 
 	// Send TOPIC if set
 	if (chan->hasTopic())
@@ -776,7 +791,12 @@ void CommandHandler::handleJoin(Client& client, const Message& msg) {
 		sendReply(client, topic_reply);
 	}
 	else
-		sendNumeric(client, RPL_NOTOPIC, channel_name + " :No topic is set");
+	{
+		std::string notopic = ":" + m_server_name + " 331 " +
+                        		client.getNickname() + " " +
+                        		channel_name + " :No topic is set\r\n";
+    	sendReply(client, notopic);
+	}
 }
 
 /**
