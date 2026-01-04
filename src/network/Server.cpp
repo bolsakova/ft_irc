@@ -19,9 +19,8 @@
 #include <sys/socket.h>   // socket, bind, listen, accept
 #include <netinet/in.h>   // sockaddr_in, htons
 #include <arpa/inet.h>    // inet_ntoa (если нужно)
-#include "../../inc/network/Server.hpp"
-#include "../../inc/network/net.hpp"
-#include "../../inc/protocol/CommandHandler.hpp"
+#include "network/Server.hpp"
+#include "protocol/CommandHandler.hpp"
 
 /*EAGAIN/EWOULDBLOCK - больше нет ожидающих подключений
 non-blocking and interrupt: обрабатывают и пробуют снова позже, не падая.-> временно нет данных, пробуем позже, не падая.
@@ -46,6 +45,55 @@ static void ignore_sigpipe()
 	sigemptyset(&sa.sa_mask);
 	sigaction(SIGPIPE, &sa, NULL);
 }
+
+static int set_non_blocking(int fd)
+{
+	// This function sets a file descriptor to non-blocking mode.
+	// Non-blocking is required for poll()/epoll() architecture without hanging.
+	// fcntl(fd, F_GETFL) -> get current flags
+	// fcntl(fd, F_SETFL) -> set new flags
+	int flags = fcntl(fd, F_GETFL, 0);
+	if (flags < 0)
+		return -1;
+	if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0)
+		return -1;
+	return 0;
+}
+
+static int parse_port_strict(const std::string &port_str)
+{
+	// CHANGED: strict validation instead of atoi() (atoi allows "12abc" -> 12).
+	// Accept only digits and range 1..65535.
+	if (port_str.empty())
+		throw std::runtime_error("Invalid port number: (empty)");
+
+	long port = 0;
+	for (std::size_t i = 0; i < port_str.size(); ++i)
+	{
+		if (port_str[i] < '0' || port_str[i] > '9')
+			throw std::runtime_error("Invalid port number: " + port_str);
+		port = port * 10 + (port_str[i] - '0');
+		if (port > 65535)
+			throw std::runtime_error("Invalid port number: " + port_str);
+	}
+	if (port <= 0 || port > 65535)
+		throw std::runtime_error("Invalid port number: " + port_str);
+	return static_cast<int>(port);
+}
+
+static void disable_pollevent(std::vector<pollfd> &poll_fds, int fd, short flag)
+{
+	// Disable specified poll event (e.g., POLLIN) for given fd
+	for (size_t i = 0; i < poll_fds.size(); ++i)
+	{
+		if (poll_fds[i].fd == fd)
+		{
+			poll_fds[i].events = poll_fds[i].events & (~flag);
+			return;
+		}
+	}
+}
+
 // TODO допустимо, но если строго «constructor does not fail silently», 
 // либо кидать исключение, либо перенести тяжелые операции в явный метод.
 Server::Server(const std::string& port, const std::string& password)
