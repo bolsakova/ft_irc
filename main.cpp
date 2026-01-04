@@ -23,7 +23,6 @@ int main(int ac, char* av[])
         std::cerr << "Usage: " << av[0] << " <port> <password>\n";
         return 1;
     }
-
     // Validate port
     int port = std::atoi(av[1]);
     if (port < 1024 || port > 65535) 
@@ -31,21 +30,18 @@ int main(int ac, char* av[])
         std::cerr << "Error: Port must be between 1024 and 65535\n";
         return 1;
     }
-    std::string port_str = av[1];//01.01 added to match Server constructor
-
+    std::string port_str = av[1];
     std::string password = av[2];
     if (password.empty()) 
 	{
         std::cerr << "Error: Password cannot be empty\n";
         return 1;
     }
-
     try 
 	{
-        Server server(port_str, password);//01.01 edited port_str, not port
+        Server server(port_str, password);
         g_server = &server;
 
-        // Setup signal handlers
         signal(SIGINT, signalHandler);
         signal(SIGTERM, signalHandler);
 
@@ -59,5 +55,3 @@ int main(int ac, char* av[])
     }
     return 0;
 }
-
-

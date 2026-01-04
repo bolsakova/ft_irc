@@ -6,7 +6,7 @@
  * [:<prefix>] <command> [<params>] [:<trailing>]
  */
 
-#include "../../inc/protocol/Parser.hpp"
+#include "protocol/Parser.hpp"
 
 /**
  * @brief Remove \r\n from the end of string
