@@ -6,7 +6,7 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/23 15:57:49 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/23 16:37:52 by aokhapki         ###   ########.fr       */
+/*   Updated: 2026/01/04 22:20:14 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -22,17 +22,17 @@ class Client;
 class Channel 
 {
 private:
-    std::string m_name;                        // Имя канала (#general, #random)
-    std::string m_topic;                       // Топик канала
-    std::string m_key;                         // Пароль (если установлен mode +k)
-    std::map<int, Client*> m_members;          // Все участники канала (fd -> Client*)
-    std::set<int> m_operators;                 // Операторы канала (fd)
-    std::set<int> m_invited;                   // Приглашенные пользователи (fd)
+    std::string m_name;
+    std::string m_topic;
+    std::string m_key;                         // Password when mode +k is set
+    std::map<int, Client*> m_members;          // All channel members (fd -> Client*)
+    std::set<int> m_operators;                 // Channel operators (fd)
+    std::set<int> m_invited;                   // Invited users (fd)
     
-    // Режимы канала
-    bool m_invite_only;                        // +i (только по приглашению)
-    bool m_topic_protected;                    // +t (только ops меняют топик)
-    int m_user_limit;                          // +l (лимит пользователей, 0 = нет лимита)
+    // Channel modes
+    bool m_invite_only;                        // +i (invite only)
+    bool m_topic_protected;                    // +t (only ops can change topic)
+    int m_user_limit;                          // +l (user limit, 0 means no limit)
 
 public:
     // OCF
@@ -80,4 +80,4 @@ public:
     void broadcast(const std::string& message, int exclude_fd = -1);
 };
 
-#endif // CHANNEL_HPP
+#endif

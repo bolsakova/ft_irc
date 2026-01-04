@@ -37,7 +37,7 @@ class Client
 		Client() = delete;                    // forbidden without fd: but fd is mandatory in this project
 		Client(const Client& src) = delete;   
 		Client& operator=(const Client& rhs) = delete;
-		// explicit constr prevents implicit(неявное) type conversions, important with fd, socket, handle
+		// explicit ctor prevents implicit conversions, important with fd/socket handles
 		explicit Client(int fd);
 		~Client();
 
