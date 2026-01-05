@@ -444,6 +444,11 @@ void CommandHandler::handleQuit(Client& client, const Message& msg)
 		}
 	}
 	
+	// send ERROR message to client before quit (based on RFC)
+    std::string error_msg = "ERROR :Closing Link: " + client.getNickname() + 
+                            " (Quit: " + reason + ")\r\n";
+    sendReply(client, error_msg);
+
 	// Mark client for disconnection
 	// Server will handle actual disconnection in main loop
 	client.markForDisconnect(reason);
@@ -625,7 +630,7 @@ void CommandHandler::handleNotice(Client& client, const Message& msg) {
 		);
 
 		// Broadcast to all channel members except sender
-		chan->broadcast(notice, client.getFD());
+		broadcastToChannel(*chan, notice, client.getFD());
 
 		// std::cout << "NOTICE from " << client.getNickname()
 		// 			<< " to channel " << target << ": " << message << "\n";

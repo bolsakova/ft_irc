@@ -136,16 +136,16 @@ void Channel::removeInvited(int fd){m_invited.erase(fd);}
 // Broadcast to all members, optionally excluding sender by fd.
 void Channel::broadcast(const std::string& message, int exclude_fd)
 {
-	std::cout << "Broadcasting to " << m_members.size() << " members" << std::endl;
+	// std::cout << "Broadcasting to " << m_members.size() << " members" << std::endl;
     for (std::map<int, Client*>::iterator it = m_members.begin();
          it != m_members.end(); ++it)
     {
         if (it->first == exclude_fd) {
-            std::cout << "  Skipping fd " << it->first << std::endl;
+            // std::cout << "  Skipping fd " << it->first << std::endl;
             continue;
         }
-        std::cout << "  Sending to fd " << it->first << " (" 
-                  << it->second->getNickname() << ")" << std::endl;
+        // std::cout << "  Sending to fd " << it->first << " (" 
+        //           << it->second->getNickname() << ")" << std::endl;
         it->second->appendToOutBuf(message);
     }
 }
