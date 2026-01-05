@@ -23,13 +23,6 @@ int main(int ac, char* av[])
         std::cerr << "Usage: " << av[0] << " <port> <password>\n";
         return 1;
     }
-    // Validate port
-    int port = std::atoi(av[1]);
-    if (port < 1024 || port > 65535) 
-	{
-        std::cerr << "Error: Port must be between 1024 and 65535\n";
-        return 1;
-    }
     std::string port_str = av[1];
     std::string password = av[2];
     if (password.empty()) 
@@ -45,7 +38,7 @@ int main(int ac, char* av[])
         signal(SIGINT, signalHandler);
         signal(SIGTERM, signalHandler);
 
-        std::cout << "IRC Server starting on port " << port << "\n";
+        std::cout << "IRC Server starting on port " << port_str << "\n";
         server.run();  // Infinite loop with poll()
     } 
 	catch (const std::exception& e) 

@@ -1,15 +1,3 @@
-/* ************************************************************************** */
-/*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   Server.cpp                                         :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2025/12/03 23:14:01 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/16 23:46:35 by aokhapki         ###   ########.fr       */
-/*                                                                            */
-/* ************************************************************************** */
-
 #include <cstring>        // strerror, memset
 #include <iostream>       // cout, cerr
 #include <cerrno>         // errno
@@ -18,15 +6,11 @@
 #include <unistd.h>       // close, read, write
 #include <sys/socket.h>   // socket, bind, listen, accept
 #include <netinet/in.h>   // sockaddr_in, htons
-#include <arpa/inet.h>    // inet_ntoa (if needed)
 #include "network/Server.hpp"
 #include "protocol/CommandHandler.hpp"
 
-/*EAGAIN/EWOULDBLOCK - no more pending connections
-non-blocking and interrupt: handled gracefully without crashing -> temporarily no data, retry later.
-================
-
-events waiting for:
+/*
+EAGAIN/EWOULDBLOCK - no pending connect, non-block and interrupt: no crash -> temp no data, retry later.
 POLLIN — data ready to read
 POLLOUT — socket ready to write
 revents returns:
@@ -39,14 +23,6 @@ fd(0, 1, 2 (stdin, stdout, stderr)
 
 /*
 ignore SIGPIPE to prevent server crash on writing to closed socket.
-When a client disconnects, writing to its socket would raise SIGPIPE,
-struct sigaction sa; — Allocate a sigaction struct.
-std::memset(&sa, 0, sizeof(sa)); — Zero out the struct for a clean start.
-sa.sa_handler = SIG_IGN; — Set the handler to “ignore this signal.”
-sigemptyset(&sa.sa_mask); — No extra signals are blocked while handling.
-sigaction(SIGPIPE, &sa, NULL); — tells the OS: 
-“For the SIGPIPE signal, use the settings in sa (which say to ignore it).
-Don’t bother storing the old handler (that’s why the last argument is NULL)
 */
 static void ignore_sigpipe()
 {
@@ -61,10 +37,6 @@ static void ignore_sigpipe()
 	Non-blocking is required for poll()/epoll() architecture without hanging/blocking or freezing the program.
 	fcntl(fd, F_GETFL) -> get current flags
 	fcntl(fd, F_SETFL) -> set new flags
-	Мы ставим сокет в неблокирующий режим, чтобы poll‑цикл не зависал на операциях ввода/вывода:
-fcntl сначала читает текущие флаги, потом добавляет O_NONBLOCK.
-В неблокирующем режиме, если пока нет данных или нельзя отправить, recv/send/accept возвращают EAGAIN/EWOULDBLOCK, 
-и сервер продолжает работу, обслуживая других клиентов, вместо того чтобы застрять на одном вызове.
 */
 static int set_non_blocking(int fd)
 {
@@ -77,7 +49,7 @@ static int set_non_blocking(int fd)
 }
 
 /*
-	Strictly parse port string to integer in range 1-65535.
+	Strictly parse port string to integer in range 1024-65535 (unprivileged).
 	Throws runtime_error on invalid input.
 	Strict validation instead of atoi()-(atoi("12abc") returns 12, 
 	overflow, empty/space returns 0 or UB
@@ -96,12 +68,14 @@ static int parse_port_strict(const std::string &port_str)
 		if (port > 65535)
 			throw std::runtime_error("Invalid port number: " + port_str);
 	}
-	if (port <= 0 || port > 65535)
+	if (port < 1024 || port > 65535)
 		throw std::runtime_error("Invalid port number: " + port_str);
 	return static_cast<int>(port);
 }
 
-// Disable specified poll event (e.g., POLLIN) for given fd
+/*
+   Disable specified poll event (e.g., POLLIN) for given fd
+*/ 
 static void disable_pollevent(std::vector<pollfd> &poll_fds, int fd, short flag)
 {
 	for (size_t i = 0; i < poll_fds.size(); ++i)
@@ -114,6 +88,14 @@ static void disable_pollevent(std::vector<pollfd> &poll_fds, int fd, short flag)
 	}
 }
 
+/*
+	Constructor sets up the listening socket and poll tracking:
+	- Ignore SIGPIPE to avoid crashing on write to closed sockets
+	- initSocket(port) creates/binds/listens non-blocking on the requested port
+	- After socket is ready, create CommandHandler
+	- Register the listening fd in poll() with POLLIN
+	- On any init failure, close the socket and rethrow to signal construction error
+*/
 Server::Server(const std::string& port, const std::string& password)
 	: m_listen_fd(-1), m_running(true), m_password(password)
 {
@@ -135,7 +117,7 @@ Server::Server(const std::string& port, const std::string& password)
 			close(m_listen_fd);
 			m_listen_fd = -1;
 		}
-		throw; // Re-throw to signal construction failure
+		throw; 
 	}
 }
 
@@ -159,7 +141,9 @@ Server::~Server()
 	m_poll_fds.clear();
 }
 
-// Find channel by name (returns nullptr if not found).
+/*
+  returns nullptr if channel not found
+*/ 
 Channel* Server::findChannel(const std::string& name)
 {
 	std::map<std::string, std::unique_ptr<Channel> >::iterator it = m_channels.find(name);
@@ -168,7 +152,6 @@ Channel* Server::findChannel(const std::string& name)
 	return it->second.get();
 }
 
-// TANJA: Find client by nickname
 Client* Server::findClientByNickname(const std::string& nickname)
 {
 	for (std::map<int, std::unique_ptr<Client>>::iterator it = m_clients.begin();
@@ -180,13 +163,14 @@ Client* Server::findClientByNickname(const std::string& nickname)
 	return NULL;
 }
 
-// TANJA: Add client to the client map (for tests)
 void Server::addClient(int fd, std::unique_ptr<Client> client)
 {
 	m_clients[fd] = std::move(client);
 }
 
-// Create channel if it doesn't exist; return pointer to existing/new.
+/*
+  Create channel if it doesn't exist; return pointer to existing/new.
+*/
 Channel* Server::createChannel(const std::string& name)
 {
 	Channel* existing = findChannel(name);
@@ -198,32 +182,28 @@ Channel* Server::createChannel(const std::string& name)
 	return raw;
 }
 
-// Remove channel by name (if exists).
+// Remove channel by name (if exists)
 void Server::removeChannel(const std::string& name){m_channels.erase(name);}
 
-// Get map of all channels (read-only access).
+// Get map of all channels (read-only access)
 const std::map<std::string, std::unique_ptr<Channel>>& Server::getChannels() const{return m_channels;}
 
 /*
-IPv4 xxx.xxx.xxx.xxx 32-bit → ~4.3 billion addresses. AF_INET
-IPv6 xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx 128-bit → ~340 undecillion addresses (more than atoms in the Solar System) AF_INET6.
-socklen_t - POSIX defines a universal and portable type for storing address structure lengths in network calls.
-works on any OS (32/64-bit) where types may differ in size.
+IPv4 32-bit  AF_INET
+IPv6 128-bit AF_INET6
 Port 0: Reserved by the OS (means "let the system choose a port")
 Linux: valid ports are 1-65535 (TCP/IP standard, 16-bit unsigned)
 Ports 1-1023 require root/sudo privileges; use 1024+ for unprivileged apps
-1. Convert port to integer and check validity
-2. Create socket (AF_INET = IPv4, TCP)
-SO_REUSEADDR - allow reusing the port after restart (without waiting)/ SOL_SOCKET = socket level/&opt = value (1 = enable)
-Without this, after server crashes, the port stays "in use" for ~60 seconds
+Convert port to integer and check validity
+Create socket (AF_INET = IPv4, TCP)
+Bind socket to the specified 0.0.0.0:port/sockaddr_in — struct from <netinet/in.h> for IPv4 socket address
+SO_REUSEADDR - allow reusing the port after restart (without waiting ~60 seconds)
 */
 void Server::initSocket(const std::string &port_str)
 {
 	int port;
 
 	port = parse_port_strict(port_str);
-	if (port <= 0 || port > 65535)
-		throw std::runtime_error("Invalid port number: " + port_str);
 	m_listen_fd = socket(AF_INET, SOCK_STREAM, 0);
 	if (m_listen_fd < 0)
 	throw std::runtime_error("socket() failed: " + std::string(strerror(errno)));
@@ -233,13 +213,11 @@ void Server::initSocket(const std::string &port_str)
 		close(m_listen_fd);
 		throw std::runtime_error("setsockopt() failed: " + std::string(strerror(errno)));
 	}
-	// 4. Bind socket to the specified 0.0.0.0:port/sockaddr_in — struct from <netinet/in.h> for IPv4 socket address
-	// initialize to zero memset (modern POSIX-style) instead of bzero(&s_addr, sizeof(s_addr)- oldst)
 	sockaddr_in server_addr;
 	std::memset(&server_addr, 0, sizeof(server_addr)); 
-	server_addr.sin_family = AF_INET; // listen on all interfaces
-	server_addr.sin_addr.s_addr = INADDR_ANY; // address in network byte order
-	server_addr.sin_port = htons(port); // port in network byte order
+	server_addr.sin_family = AF_INET; 
+	server_addr.sin_addr.s_addr = INADDR_ANY;// address in network byte order 
+	server_addr.sin_port = htons(port);// port in network byte order
 
 	if (bind(m_listen_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
 	{
@@ -259,10 +237,17 @@ void Server::initSocket(const std::string &port_str)
 		throw std::runtime_error("set_non_blocking() failed: " + std::string(strerror(errno)));
 	}
 	// std::cout << "Listening on port " << port << " (non-blocking)" << std::endl;
-	// return;
 }
 
 
+/*
+	Accept new incoming connections on the listening socket:
+	- Loop accept() until EAGAIN/EWOULDBLOCK (non-blocking listener)
+	- On error: log and stop processing
+	- Set each client socket to non-blocking
+	- Add new fd to poll list with POLLIN
+	- Create Client object for the new connection
+*/
 void Server::acceptClient()
 {
 	while (true)
@@ -294,13 +279,17 @@ void Server::acceptClient()
 		pfd.revents = 0;
 		m_poll_fds.push_back(pfd);//push_back копирует структуру pollfd и добавляет в вектор
 		m_clients.emplace(client_fd, std::make_unique<Client>(client_fd)); //without copy constructor
-		std::cout << "New client accepted, fd = " << client_fd << std::endl;
+		// std::cout << "New client accepted, fd = " << client_fd << std::endl;
 	}
 }
 
+/*
+ Remove fd from poll fds
+ Close socket (free OS resource)
+ Remove from clients map (unique_ptr frees memory)
+*/
 void Server::disconnectClient(int fd)
 {
-	// 1. Remove fd from poll fds
 	for (size_t i = 0; i < m_poll_fds.size(); ++i)
 	{
 		if (m_poll_fds[i].fd == fd)
@@ -309,35 +298,36 @@ void Server::disconnectClient(int fd)
 			break;
 		}
 	}
-	// 2. Close socket (free OS resource)
 	if (fd >= 0)
 		close(fd);
-	// 3. Remove from clients map (unique_ptr frees memory)
+
 	m_clients.erase(fd);
-	std::cout << "Client fd " << fd << " disconnected and removed." << std::endl;
+	// std::cout << "Client fd " << fd << " disconnected and removed." << std::endl;
 }
 
+/*
+	Iterate through all tracked descriptors
+	Find the target fd
+	Add POLLOUT flag so poll() waits for write-ready
+	Exit after updating the target descriptor
+*/
 void Server::enablePolloutForFD(int fd)
 {
-	// 1. Iterate through all tracked descriptors
 	for(size_t i = 0; i < m_poll_fds.size(); ++i)
 	{
-		// 2. Find the target fd
 		if(m_poll_fds[i].fd == fd)
 		{
-			// 3. Add POLLOUT flag so poll() waits for write-ready
 			m_poll_fds[i].events = m_poll_fds[i].events | POLLOUT;
-			// 4. Exit after updating the target descriptor
 			return;
 		}
 	}
 }
 
 /*
-1. Iterate through all tracked descriptors
-2. Find the target fd
-3. Remove POLLOUT flag so poll() no longer waits for write-ready
-4. Exit after updating the target descriptor
+ Iterate through all tracked descriptors
+ Find the target fd
+ Remove POLLOUT flag so poll() no longer waits for write-ready
+ Exit after updating the target descriptor
 */
 void Server::disablePolloutForFd(int fd)
 {
@@ -367,7 +357,13 @@ void Server::cleanupDisconnectedClients()
 		disconnectClient(to_disconnect[i]);
 }
 
-// 2. Partial command handling — proper non-blocking receive loop
+/* Partial command handling — proper non-blocking receive loop
+ 4096 is a common chunk size
+ Read repeatedly until EAGAIN/EWOULDBLOCK
+ On error: log and drop client
+ On 0 bytes (EOF/Ctrl+D): stop POLLIN, mark peer closed, disconnect after flushing pending output
+ On data: append to per-client buffer (with size guard) and process all complete commands (CRLF/LF)
+*/
 bool Server::receiveData(int fd)
 {
 	char buffer[4096];
@@ -378,7 +374,7 @@ bool Server::receiveData(int fd)
 		if (bytes_read < 0)
 		{
 			if (errno == EAGAIN || errno == EWOULDBLOCK)
-				break; // no more data for now
+				break;
 			std::cerr << "recv() failed on fd " << fd << ": "
 					  << std::strerror(errno) << std::endl;
 			disconnectClient(fd);
@@ -386,14 +382,12 @@ bool Server::receiveData(int fd)
 		}
 		if (bytes_read == 0)
 		{
-			// peer closed input (EOF)
-			std::cout << "Client fd " << fd << " closed input (EOF).\n";
+			// std::cout << "Client fd " << fd << " closed input (EOF).\n";
 			auto it = m_clients.find(fd);
 			if (it == m_clients.end())
 				return false;
 			Client &client = *(it->second);
 			client.markPeerClosed();
-			// Stop reading: no more POLLIN. But keep POLLOUT to flush outbuf.
 			disable_pollevent(m_poll_fds, fd, POLLIN);
 			if (!client.hasDataToSend())
 			{
@@ -402,10 +396,10 @@ bool Server::receiveData(int fd)
 			}
 			return true;
 		}
-		// Find client safely
 		auto it = m_clients.find(fd);
 		if (it == m_clients.end())
-			return false; // client already removed
+			return false;
+
 		Client &client = *(it->second);
 
 		std::string data(buffer, static_cast<std::size_t>(bytes_read));
@@ -418,7 +412,6 @@ bool Server::receiveData(int fd)
 			return false;
 		}
 		client.appendToInBuf(data);
-		// Process all complete commands currently in buffer
 		while (client.hasCompleteCmd())
 		{
 			std::string cmd = client.extractNextCmd();
@@ -435,14 +428,18 @@ const std::map<int, std::unique_ptr<Client>>& Server::getClients() const
 	return m_clients;
 }
 
+/* 
+#ifdef MSG_NOSIGNAL
+	flags = MSG_NOSIGNAL;
+ Protect from SIGPIPE on Linux with MSG_NOSIGNAL (extra safety).
+ We still ignore SIGPIPE globally, but this makes send() itself safer.
+*/
 void Server::sendData(int fd)
 {
-	// never use m_clients[fd] (operator[] can create a new empty entry!)
 	auto it = m_clients.find(fd);
 	if (it == m_clients.end())
 		return;
 	Client &client = *(it->second);
-	// If nothing in outgoing buffer — exit immediately
 	if (!client.hasDataToSend())
 	{
 		disablePolloutForFd(fd);
@@ -453,27 +450,23 @@ void Server::sendData(int fd)
         }
 		return;
 	}
-	// Try to send buffer contents to socket
 	const std::string &out = client.getOutBuf();
-	// protect from SIGPIPE on Linux with MSG_NOSIGNAL (extra safety).
-	// We still ignore SIGPIPE globally, but this makes send() itself safer.
+
 	int flags = 0;
+
 	#ifdef MSG_NOSIGNAL
 		flags = MSG_NOSIGNAL;
 	#endif
 	ssize_t sent = send(fd, out.c_str(), out.size(), flags);
-	// Handle send() errors
 	if (sent < 0)
-	{	// Socket temporarily not ready for write — retry later
+	{	
 		if (errno == EAGAIN || errno == EWOULDBLOCK)
 			return;
-		// Any other error — disconnect client
 		std::cerr << "send() failed on fd " << fd << ": "
-				  << std::strerror(errno) << std::endl; // CHANGED: log errno
+				  << std::strerror(errno) << std::endl;
 		disconnectClient(fd);
 		return;
 	}
-	// Remove already sent portion from buffer
 	client.consumeOutBuf(static_cast<std::size_t>(sent));
 	// If buffer is empty — stop watching POLLOUT
 	// if (!client.hasDataToSend())
@@ -497,10 +490,10 @@ void Server::sendData(int fd)
 }
 
 /*
-One blocking poll() call on all tracked fds: 
-pointer to array 1st el, count of els, 
-timeout -1 - wait indefinitely until any fd is ready; 
-returns count offds have events (or -1 - error).
+	One blocking poll() call on all tracked fds: 
+	pointer to array 1st el, count of els, 
+	timeout -1 - wait indefinitely until any fd is ready; 
+	returns count offds have events (or -1 - error).
 */
 void Server::run() 
 {
@@ -508,7 +501,6 @@ void Server::run()
 
     while (m_running) 
 	{
-        // SINGLE poll() call in the entire program
         int poll_count = poll(&m_poll_fds[0], m_poll_fds.size(), -1);
         
         if (poll_count < 0) 
@@ -581,7 +573,7 @@ void Server::run()
     }
 }
 
-// 1. Method for graceful shutdown
+//  Method for graceful shutdown
 void Server::stop()
 {
 	if (!m_running)
@@ -605,7 +597,6 @@ void Server::stop()
 		// Try to send immediately; sendData will handle partial sends and errors
 		sendData(fd);
 	}
-	// Now disconnect all clients cleanly
 	for (size_t i = 0; i < fds.size(); ++i)
 	{
 		disconnectClient(fds[i]);
@@ -617,3 +608,4 @@ void Server::stop()
 	}
 	m_poll_fds.clear();
 }
+
