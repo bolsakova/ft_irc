@@ -1,7 +1,7 @@
 NAME = ircserv #subject
 
 CXX = c++
-CXXFLAGS = -Wall -Wextra -Werror -std=c++17 #-std=c++98
+CXXFLAGS = -Wall -Wextra -Werror -std=c++17 -g -O0
 
 # Debug mode (make debug)
 ifdef DEBUG

@@ -350,7 +350,7 @@ void Server::cleanupDisconnectedClients()
 	for (std::map<int, std::unique_ptr<Client>>::const_iterator it = m_clients.begin();
 		 it != m_clients.end(); ++it)
 	{
-		if (it->second->shouldDisconnect())
+		if (it->second->shouldDisconnect() && !it->second->hasDataToSend())
 			to_disconnect.push_back(it->first);
 	}
 	for (size_t i = 0; i < to_disconnect.size(); ++i)
@@ -443,6 +443,11 @@ void Server::sendData(int fd)
 	if (!client.hasDataToSend())
 	{
 		disablePolloutForFd(fd);
+		// Проверить, помечен ли клиент для отключения ПОСЛЕ отправки буфера
+        if (client.shouldDisconnect())
+        {
+            disconnectClient(fd);
+        }
 		return;
 	}
 	const std::string &out = client.getOutBuf();
@@ -463,10 +468,24 @@ void Server::sendData(int fd)
 		return;
 	}
 	client.consumeOutBuf(static_cast<std::size_t>(sent));
-	if (!client.hasDataToSend())
-		disablePolloutForFd(fd);
-	if (client.isPeerClosed() && !client.hasDataToSend())
-		disconnectClient(fd);
+	// If buffer is empty — stop watching POLLOUT
+	// if (!client.hasDataToSend())
+	// 	disablePolloutForFd(fd);
+	// // If peer already closed and we finished sending,now we can close our side too
+	// // if (client.isPeerClosed()) // TODO add && !client.hasDataToSend()), delete after testing
+	// // disconnect only after we flushed everything
+	// if (client.isPeerClosed() && !client.hasDataToSend())
+	// 	disconnectClient(fd);
+	// If buffer is empty — stop watching POLLOUT
+    if (!client.hasDataToSend())
+    {
+        disablePolloutForFd(fd);
+        // Отключить клиента ПОСЛЕ отправки всех данных
+        if (client.shouldDisconnect() || client.isPeerClosed())
+        {
+            disconnectClient(fd);
+        }
+    }
 	return;
 }
 
@@ -503,14 +522,42 @@ void Server::run()
             // Client socket - read/write
             else 
 			{
-                int client_fd = m_poll_fds[i].fd;
+				int client_fd = m_poll_fds[i].fd;
                 
+				// Ready to write (and has data to send)
+				if (m_poll_fds[i].revents & POLLOUT) 
+				{
+					Client* client = m_clients[client_fd].get();
+					if (!client->getOutBuf().empty())
+						sendData(client_fd);
+				}
                 // Check for errors/hangup
-                if (m_poll_fds[i].revents & (POLLERR | POLLHUP | POLLNVAL)) 
+                if (m_poll_fds[i].revents & (POLLERR | POLLNVAL)) 
 				{
                     disconnectClient(client_fd);
                     continue;
-                }      
+                }
+				// POLLHUP — клиент закрыл соединение, но мы можем ещё отправить данные
+                if (m_poll_fds[i].revents & POLLHUP)
+                {
+                    auto it = m_clients.find(client_fd);
+                    if (it != m_clients.end())
+                    {
+                        Client& client = *(it->second);
+                        client.markPeerClosed();
+                        // Если есть данные для отправки — не отключать сразу
+                        if (!client.hasDataToSend())
+                        {
+                            disconnectClient(client_fd);
+                            continue;
+                        }
+                        // Иначе отключим после отправки в sendData
+                    }
+                    else
+                    {
+                        continue;
+                    }
+                }
                 // Ready to read
                 if (m_poll_fds[i].revents & POLLIN) 
 				{
@@ -519,13 +566,6 @@ void Server::run()
                         disconnectClient(client_fd);
                         continue;
                     }
-                }
-                // Ready to write (and has data to send)
-                if (m_poll_fds[i].revents & POLLOUT) 
-				{
-                    Client* client = m_clients[client_fd].get();
-                    if (!client->getOutBuf().empty())
-                        sendData(client_fd);
                 }
             }
         }

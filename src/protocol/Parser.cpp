@@ -1,5 +1,4 @@
 /**
- * @file Parser.cpp
  * @brief IRC message parser implementation
  * 
  * Implements IRC message parsing logic according to RFC 1459 format:

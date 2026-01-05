@@ -1,4 +1,5 @@
 Сервер:
+
 ./ircserv 6667 pass
 Server started on port 6667
 Server is running and waiting for connections...

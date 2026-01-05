@@ -1,5 +1,4 @@
 /**
- * @file CommandHandler.cpp
  * @brief IRC command handler implementation
  * 
  * Implements all IRC command handlers (PASS, NICK, USER, PING, QUIT, PRIVMSG,
@@ -30,11 +29,11 @@ CommandHandler::CommandHandler(Server& server, const std::string& password)
  * @return true if valid, false otherwise
  */
 bool CommandHandler::isValidNickname(const std::string& nickname) {
-	// Step 1: Check length constraints
+	// Check length constraints
 	if (nickname.empty() || nickname.length() > 9)
 		return false;
 	
-	// Step 2: Validate first character
+	// Validate first character
 	// Must be letter or special character from RFC 1459
 	char first = nickname[0];
 	if (!std::isalpha(first) &&
@@ -43,7 +42,7 @@ bool CommandHandler::isValidNickname(const std::string& nickname) {
 		first != '{' && first != '|' && first != '}')
 		return false;
 	
-	// Step 3: Validate remaining characters
+	// Validate remaining characters
 	// Can be letter, digit, special, or hyphen
 	for (size_t i = 1; i < nickname.length(); ++i) {
 		char c = nickname[i];
@@ -187,10 +186,10 @@ void CommandHandler::sendNumeric(Client& client, int numeric_code, const std::st
 }
 
 /**
- * @brief Broadcast a message to a channel and mark recipients for writing.
- * Channel::broadcast only appends data to client output buffers. We additionally
- * enable POLLOUT for every recipient (except optionally the sender) so the
- * server's poll loop will flush the pending data without waiting for furtherinput from those clients.
+ * @brief Broadcast a message to a channel and enable POLLOUT for recipients.
+ * @param channel Target channel
+ * @param message Formatted IRC message (must end with \r\n)
+ * @param exclude_fd Optional file descriptor to exclude from receiving the message (e.g., sender)
  */
 void CommandHandler::broadcastToChannel(Channel& channel, const std::string& message, int exclude_fd) {
 	channel.broadcast(message, exclude_fd);
@@ -205,6 +204,8 @@ void CommandHandler::broadcastToChannel(Channel& channel, const std::string& mes
 /**
  * @brief Handle PASS command - authenticate client with server password.
  * Format: PASS <password>
+ * @param client Target client issuing the PASS command
+ * @param msg Parsed IRC message containing parameters and/or trailing (password)
  */
 void CommandHandler::handlePass(Client& client, const Message& msg) {
 	// Check if client already completed registration
@@ -225,7 +226,7 @@ void CommandHandler::handlePass(Client& client, const Message& msg) {
 	// Verify password against server password
 	if (password == m_password) {
 		client.setAuthenticated(true);
-		std::cout << "Client fd " << client.getFD() << " authenticated successfully\n";
+		// std::cout << "Client fd " << client.getFD() << " authenticated successfully\n";
 
 		// Check if client can now be registered
 		// Registration requires: authenticated + nickname + username
@@ -234,19 +235,21 @@ void CommandHandler::handlePass(Client& client, const Message& msg) {
 		{
 			client.setRegistered(true);
 			sendWelcome(client);
-			std::cout << "Client fd " << client.getFD() << " is now fully registered\n";
+			// std::cout << "Client fd " << client.getFD() << " is now fully registered\n";
 		}
 	}
 	else
 	{
 		sendError(client, ERR_PASSWDMISMATCH, "", "Password incorrect");
-		std::cout << "Client fd " << client.getFD() << " authentication failed\n";
+		// std::cout << "Client fd " << client.getFD() << " authentication failed\n";
 	}
 }
 
 /**
  * @brief Handle NICK command - set or change client's nickname.
  * Format: NICK <nickname>
+ * @param client Client issuing the NICK command
+ * @param msg Parsed IRC message containing the desired nickname
  */
 void CommandHandler::handleNick(Client& client, const Message& msg) {
 	// Check if nickname parameter was provided
@@ -275,7 +278,7 @@ void CommandHandler::handleNick(Client& client, const Message& msg) {
 
 	// Set the new nickname
 	client.setNickname(new_nick);
-	std::cout << "Client fd " << client.getFD() << " nickname set to: " << new_nick << "\n";
+	// std::cout << "Client fd " << client.getFD() << " nickname set to: " << new_nick << "\n";
 
 	// If client is already registered, notify about nick change
 	if (client.isRegistered()) {
@@ -295,7 +298,7 @@ void CommandHandler::handleNick(Client& client, const Message& msg) {
 				broadcastToChannel(*chan, nick_change, client.getFD());
 			}
 		}
-		std::cout << "Nick change broadcast: " << old_nick << " -> " << new_nick << "\n";
+		// std::cout << "Nick change broadcast: " << old_nick << " -> " << new_nick << "\n";
 	}
 	
 	// Check if client can now be registered
@@ -305,13 +308,15 @@ void CommandHandler::handleNick(Client& client, const Message& msg) {
 	{
 		client.setRegistered(true);
 		sendWelcome(client);
-		std::cout << "Client fd " << client.getFD() << " is now fully registered\n";
+		// std::cout << "Client fd " << client.getFD() << " is now fully registered\n";
 	}
 }
 
 /**
  * @brief Handle USER command - set username and realname.
  * Format: USER <username> <hostname> <servername> :<realname>
+ * @param client Client issuing the USER command
+ * @param msg Parsed IRC message containing username, hostname, servername and realname
  */
 void CommandHandler::handleUser(Client& client, const Message& msg) {
 	// Check if client already completed registration
@@ -335,8 +340,8 @@ void CommandHandler::handleUser(Client& client, const Message& msg) {
 	client.setUsername(msg.params[0]);
 	client.setRealname(msg.trailing);
 
-	std::cout << "Client fd " << client.getFD() << " username: " << msg.params[0]
-				<< ", realname: " << msg.trailing << "\n";
+	// std::cout << "Client fd " << client.getFD() << " username: " << msg.params[0]
+				// << ", realname: " << msg.trailing << "\n";
 
 	// Check if client can now be registered
 	// Registration requires: authenticated + nickname + username
@@ -345,13 +350,15 @@ void CommandHandler::handleUser(Client& client, const Message& msg) {
 	{
 		client.setRegistered(true);
 		sendWelcome(client);
-		std::cout << "Client fd " << client.getFD() << " is now fully registered\n";
+		// std::cout << "Client fd " << client.getFD() << " is now fully registered\n";
 	}
 }
 
 /**
  * @brief Handle PING command - respond with PONG to keep connection alive.
  * Format: PING <token> or PING :<token>
+ * @param client Client issuing the PING
+ * @param msg Parsed IRC message containing optional token (params[0] or trailing)
  */
 void CommandHandler::handlePing(Client& client, const Message& msg)
 {
@@ -381,19 +388,21 @@ void CommandHandler::handlePing(Client& client, const Message& msg)
 	
 	sendReply(client, pong_reply);
 
-	std::cout << "Client fd " << client.getFD() << " PING/PONG: " << token << "\n";
+	// std::cout << "Client fd " << client.getFD() << " PING/PONG: " << token << "\n";
 }
 
 /**
  * @brief Handle QUIT command - disconnect cliet from server.
  * Format: QUIT [:<reason>]
+ * @param client Client issuing the QUIT command
+ * @param msg Parsed IRC message containing optional quit reason (trailing)
  */
 void CommandHandler::handleQuit(Client& client, const Message& msg)
 {
 	// Extract quit reason (optional)
 	std::string reason = msg.trailing.empty() ? "Client exited" : msg.trailing;
 
-	std::cout << "Client fd " << client.getFD() << " quit: " << reason << "\n";
+	// std::cout << "Client fd " << client.getFD() << " quit: " << reason << "\n";
 
 	// Build QUIT message to broadcast to channels
 	// Format: :nick!user@host QUIT :reason
@@ -431,10 +440,15 @@ void CommandHandler::handleQuit(Client& client, const Message& msg)
 		for (size_t i = 0; i < channels_to_remove.size(); ++i)
 		{
 			m_server.removeChannel(channels_to_remove[i]);
-			std::cout << "Channel " << channels_to_remove[i] << " removed (empty after QUIT)\n";
+			// std::cout << "Channel " << channels_to_remove[i] << " removed (empty after QUIT)\n";
 		}
 	}
 	
+	// send ERROR message to client before quit (based on RFC)
+    std::string error_msg = "ERROR :Closing Link: " + client.getNickname() + 
+                            " (Quit: " + reason + ")\r\n";
+    sendReply(client, error_msg);
+
 	// Mark client for disconnection
 	// Server will handle actual disconnection in main loop
 	client.markForDisconnect(reason);
@@ -443,6 +457,8 @@ void CommandHandler::handleQuit(Client& client, const Message& msg)
 /**
  * @brief Handle PRIVMSG command - send private message to user or channel.
  * Format: PRIVMSG <target> :<message>
+ * @param client Client issuing the PRIVMSG command
+ * @param msg Parsed IRC message containing target and message text
  */
 void CommandHandler::handlePrivmsg(Client& client, const Message& msg)
 {
@@ -503,8 +519,8 @@ void CommandHandler::handlePrivmsg(Client& client, const Message& msg)
 		// Broadcast to all channel memers except sender
 		broadcastToChannel(*chan, privmsg, client.getFD());
 
-		std::cout << "PRIVMSG from " << client.getNickname()
-					<< " to channel " << target << ": " << message << "\n";
+		// std::cout << "PRIVMSG from " << client.getNickname()
+		// 			<< " to channel " << target << ": " << message << "\n";
 	} 
 	else
 	{
@@ -544,14 +560,16 @@ void CommandHandler::handlePrivmsg(Client& client, const Message& msg)
 		// Send to target user
 		sendReply(*target_client, privmsg);
 
-		std::cout << "PRIVMSG from " << client.getNickname()
-					<< " to " << target << ": " << message << "\n";
+		// std::cout << "PRIVMSG from " << client.getNickname()
+		// 			<< " to " << target << ": " << message << "\n";
 	}
 }
 
 /**
  * @brief Handle NOTICE command - send notice to user or channel.
  * Format: NOTICE <target> :<message>
+ * @param client Client issuing the NOTICE command
+ * @param msg Parsed IRC message containing target and message text
  * 
  * Identical to PRIVMSG but used for automated messages.
  * Important: Servers and clients MUST NOT auto-reply to NOTICE.
@@ -612,10 +630,10 @@ void CommandHandler::handleNotice(Client& client, const Message& msg) {
 		);
 
 		// Broadcast to all channel members except sender
-		chan->broadcast(notice, client.getFD());
+		broadcastToChannel(*chan, notice, client.getFD());
 
-		std::cout << "NOTICE from " << client.getNickname()
-					<< " to channel " << target << ": " << message << "\n";
+		// std::cout << "NOTICE from " << client.getNickname()
+		// 			<< " to channel " << target << ": " << message << "\n";
 	}
 	else
 	{
@@ -654,14 +672,16 @@ void CommandHandler::handleNotice(Client& client, const Message& msg) {
 		// Send to target user
 		sendReply(*target_client, notice);
 
-		std::cout << "NOTICE from " << client.getNickname()
-					<< " to " << target << ": " << message << "\n";
+		// std::cout << "NOTICE from " << client.getNickname()
+		// 			<< " to " << target << ": " << message << "\n";
 	}
 }
 
 /**
  * @brief Handle JOIN command - join or create a channel
  * Format: JOIN <channel> [key]
+ * @param client Client attempting to join
+ * @param msg Parsed IRC message containing channel name and optional key
  */
 void CommandHandler::handleJoin(Client& client, const Message& msg) {
 	// Check if client is registered
@@ -696,7 +716,7 @@ void CommandHandler::handleJoin(Client& client, const Message& msg) {
 		chan = m_server.createChannel(channel_name);
 		// First member becomes operator
 		chan->addOperator(client.getFD());
-		std::cout << "Created new channel: " << channel_name << ", operator: " << client.getNickname() << "\n";
+		// std::cout << "Created new channel: " << channel_name << ", operator: " << client.getNickname() << "\n";
 	}
 	else
 	{
@@ -749,7 +769,7 @@ void CommandHandler::handleJoin(Client& client, const Message& msg) {
 	// Broadcast JOIN to all members (including sender)
 	broadcastToChannel(*chan, join_msg);
 
-	std::cout << client.getNickname() << " joined " << channel_name << "\n";
+	// std::cout << client.getNickname() << " joined " << channel_name << "\n";
 
 	// Send NAMES list (RPL_NAMREPLY + RPL_ENDOFNAMES)
 	// Build list of nicknames with @ prefix for operators
@@ -802,6 +822,8 @@ void CommandHandler::handleJoin(Client& client, const Message& msg) {
 /**
  * @brief Handle PART command - client leaves a channel
  * Syntax: PART <channel> [<reason>]
+ * @param client Client issuing the PART command
+ * @param msg Parsed IRC message containing channel name and optional reason
  */
 void CommandHandler::handlePart(Client& client, const Message& msg) {
 	// Check if client is registered
@@ -851,10 +873,10 @@ void CommandHandler::handlePart(Client& client, const Message& msg) {
 	// Broadcast PART to all channel members (including sender)
 	broadcastToChannel(*chan, part_msg);
 
-	std::cout << client.getNickname() << " left " << channel_name;
-	if (!reason.empty())
-		std::cout << " (" << reason << ")";
-	std::cout << "\n";
+	// std::cout << client.getNickname() << " left " << channel_name;
+	// if (!reason.empty())
+	// 	std::cout << " (" << reason << ")";
+	// std::cout << "\n";
 
 	// Remove client from channel
 	chan->removeMember(client.getFD());
@@ -863,13 +885,15 @@ void CommandHandler::handlePart(Client& client, const Message& msg) {
 	if (chan->isEmpty())
 	{
 		m_server.removeChannel(channel_name);
-		std::cout << "Channel " << channel_name << " removed (empty after PART)\n";
+		// std::cout << "Channel " << channel_name << " removed (empty after PART)\n";
 	}
 }
 
 /**
  * @brief Handle KICK command - operator removes user from channel
  * Format: KICK <channel> <user> [<reason>]
+ * @param client Operator issuing the KICK
+ * @param msg Parsed IRC message containing channel, target nick, and optional reason
  */
 void CommandHandler::handleKick(Client& client, const Message& msg) {
 	// Check if client is registered
@@ -952,8 +976,8 @@ void CommandHandler::handleKick(Client& client, const Message& msg) {
 	// Broadcast KICK to all channel members (including kicked user)
 	broadcastToChannel(*chan, kick_msg);
 
-	std::cout << client.getNickname() << " kicked " << target_nick
-				<< " from " << channel_name << " (" << reason << ")\n";
+	// std::cout << client.getNickname() << " kicked " << target_nick
+	// 			<< " from " << channel_name << " (" << reason << ")\n";
 
 	// Remove target from channel
 	chan->removeMember(target_fd);
@@ -962,13 +986,15 @@ void CommandHandler::handleKick(Client& client, const Message& msg) {
 	if (chan->isEmpty())
 	{
 		m_server.removeChannel(channel_name);
-		std::cout << "Channel " << channel_name << " removed (empty after KICK)\n";
+		// std::cout << "Channel " << channel_name << " removed (empty after KICK)\n";
 	}
 }
 
 /**
  * @brief Handle INVITE command - invite user to channel
  * Format: INVITE <nickname> <channel>
+ * @param client Client issuing the INVITE command
+ * @param msg Parsed IRC message containing target nickname and channel name
  */
 void CommandHandler::handleInvite(Client& client, const Message& msg) {
 	// Check if client is registered
@@ -1071,13 +1097,15 @@ void CommandHandler::handleInvite(Client& client, const Message& msg) {
     // Format: :server 341 sender target #channel
 	sendNumeric(client, RPL_INVITING, target_nick + " " + channel_name);
 
-	std::cout << client.getNickname() << " invited " << target_nick
-				<< " to " << channel_name << "\n";
+	// std::cout << client.getNickname() << " invited " << target_nick
+	// 			<< " to " << channel_name << "\n";
 }
 
 /**
  * @brief Handle TOPIC command - view or change channel topic
  * Format: TOPIC <channel> [:<new topic>]
+ * @param client Client issuing the TOPIC command
+ * @param msg Parsed IRC message containing channel name and optional new topic
  */
 void CommandHandler::handleTopic(Client& client, const Message& msg) {
 	// Check if client is registered
@@ -1158,14 +1186,16 @@ void CommandHandler::handleTopic(Client& client, const Message& msg) {
 		// Broadcast TOPIC change to all channel members
 		broadcastToChannel(*chan, topic_msg);
 
-		std::cout << client.getNickname() << " set topic for "
-					<< channel_name << ": " << new_topic << "\n";
+		// std::cout << client.getNickname() << " set topic for "
+		// 			<< channel_name << ": " << new_topic << "\n";
 	}
 }
 
 /**
  * @brief Handle MODE command - view or change channel modes
  * Format: MODE <channel> [<+/-modes> [parameters...]]
+ * @param client Client issuing the MODE command
+ * @param msg Parsed IRC message containing target and mode changes
  */
 void CommandHandler::handleMode(Client& client, const Message& msg) {
 	// Check if client is registered
@@ -1200,6 +1230,9 @@ void CommandHandler::handleMode(Client& client, const Message& msg) {
 /**
  * @brief Handle user MODE command
  * Format: MODE <nickname> [+/-modes]
+ * @param client Client issuing the MODE command
+ * @param msg Parsed IRC message containing target and mode changes
+ * @param target Target nickname for the MODE command
  */
 void CommandHandler::handleUserMode(Client& client, const Message& msg, const std::string& target) {
 	// User can only set modes for themselves
@@ -1295,13 +1328,16 @@ void CommandHandler::handleUserMode(Client& client, const Message& msg, const st
                               client.getNickname() + " :" + applied_modes + "\r\n";
         sendReply(client, mode_msg);
         
-        std::cout << client.getNickname() << " set user modes: " << applied_modes << "\n";
+        // std::cout << client.getNickname() << " set user modes: " << applied_modes << "\n";
     }
 }
 
 /**
  * @brief Handle channel MODE command
  * Format: MODE <channel> [+/-modes] [parameters]
+ * @param client Client issuing the MODE command
+ * @param msg Parsed IRC message containing target and mode changes
+ * @param channel_name Target channel name for the MODE command
  */
 void CommandHandler::handleChannelMode(Client& client, const Message& msg, const std::string& channel_name) {
 	// Validate channel exists
@@ -1598,6 +1634,8 @@ void CommandHandler::handleChannelMode(Client& client, const Message& msg, const
 /**
  * @brief Handle CAP command - capability negotiation
  * Format: CAP <subcommand> [:<capabilities>]
+ * @param client Client issuing CAP
+ * @param msg Parsed IRC message containing subcommand and optional capabilities
  * 
  * Miminal implementation for irssi compatibility.
  * We don't support any capabilities, just acknowledge the negotiation.
@@ -1616,12 +1654,12 @@ void CommandHandler::handleCap(Client& client, const Message& msg) {
                                 (client.getNickname().empty() ? "*" : client.getNickname()) +
                                 " LS :\r\n";
         sendReply(client, cap_reply);
-		std::cout << "Client fd " << client.getFD() << " CAP LS (empty list sent)\n";
+		// std::cout << "Client fd " << client.getFD() << " CAP LS (empty list sent)\n";
 	}
 	else if (subcommand == "END")
 	{
 		// Client finished capability negotiation
-		std::cout << "Client fd " << client.getFD() << " CAP END\n";
+		// std::cout << "Client fd " << client.getFD() << " CAP END\n";
 		// Nothing to do, client will continue with PASS/NICK/USER
 	}
 	else if (subcommand == "REQ")
@@ -1632,13 +1670,15 @@ void CommandHandler::handleCap(Client& client, const Message& msg) {
                                 (client.getNickname().empty() ? "*" : client.getNickname()) +
                                 " NAK :" + msg.trailing + "\r\n";
 		sendReply(client, cap_reply);
-		std::cout << "Client fd " << client.getFD() << " CAP REQ (rejected)\n";
+		// std::cout << "Client fd " << client.getFD() << " CAP REQ (rejected)\n";
 	}
 }
 
 /**
  * @brief Handle WHO command - list users in channel or matching pattern
  * Format: WHO <channel|mask>
+ * @param client Client issuing WHO
+ * @param msg Parsed IRC message containing channel or mask
  * 
  * Returns information about users in a channel or matching a pattern.
  * Used by irssi to query channel members.
@@ -1702,7 +1742,7 @@ void CommandHandler::handleWho(Client& client, const Message& msg) {
 		
 		// Send end of WHO list
 		sendNumeric(client, RPL_ENDOFWHO, target + " :End of WHO list");
-		std::cout << client.getNickname() << " queried WHO for " << target << "\n";
+		// std::cout << client.getNickname() << " queried WHO for " << target << "\n";
 	}
 	else
 	{
@@ -1726,7 +1766,7 @@ void CommandHandler::handleWho(Client& client, const Message& msg) {
 		}
 		// Send end of WHO list
 		sendNumeric(client, RPL_ENDOFWHO, target + " :End of WHO list");
-		std::cout << client.getNickname() << " queried WHO for " << target << "\n";
+		// std::cout << client.getNickname() << " queried WHO for " << target << "\n";
 	}
 }
 
@@ -1740,7 +1780,7 @@ void CommandHandler::handleCommand(const std::string& raw_command, Client& clien
 		// Parse the raw IRC message into structured format
 		Message msg = Parser::parse(raw_command);
 
-		std::cout << "Parsed command: " << msg.command << " from fd " << client.getFD() << "\n";
+		// std::cout << "Parsed command: " << msg.command << " from fd " << client.getFD() << "\n";
 
 		// Route to appropriate command handler
 		if (msg.command == "PASS")

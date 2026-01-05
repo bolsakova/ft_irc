@@ -1,4 +1,4 @@
-#include "inc/network/Server.hpp"
+#include "network/Server.hpp"
 #include <iostream>
 #include <cstdlib>
 #include <csignal>
