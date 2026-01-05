@@ -481,6 +481,12 @@ void Server::sendData(int fd)
 	return;
 }
 
+/*
+One blocking poll() call on all tracked fds: 
+pointer to array 1st el, count of els, 
+timeout -1 - wait indefinitely until any fd is ready; 
+returns count offds have events (or -1 - error).
+*/
 void Server::run() 
 {
     m_running = true;
@@ -495,7 +501,7 @@ void Server::run()
             if (errno == EINTR) continue;  // Signal interrupted
             throw std::runtime_error("poll() failed");
         }
-        // Check all file descriptors
+        // Check all file descriptors POLLIN/OUT/ERR/HUP or revents - 0(client makes nothing)
         for (size_t i = 0; i < m_poll_fds.size(); ++i) 
 		{
             if (m_poll_fds[i].revents == 0)
