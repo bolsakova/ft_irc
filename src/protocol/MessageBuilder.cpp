@@ -6,7 +6,7 @@
  * for constructing RFC 1459 compliant server responses.
  */
 
-#include "../../inc/protocol/MessageBuilder.hpp"
+#include "protocol/MessageBuilder.hpp"
 
 /**
  * @brief Check if the message has a prefix

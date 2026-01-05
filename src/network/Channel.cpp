@@ -6,16 +6,15 @@
 /*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/23 16:08:00 by aokhapki          #+#    #+#             */
-/*   Updated: 2025/12/23 17:00:55 by aokhapki         ###   ########.fr       */
+/*   Updated: 2026/01/04 22:19:30 by aokhapki         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "../../inc/network/Channel.hpp"
-#include "../../inc/network/Client.hpp"
+#include "network/Channel.hpp"
+#include "network/Client.hpp"
 #include <iostream>
 
-// Конструктор по умолчанию: создаем пустой канал с выключенными режимами.
-// Имя/топик/ключ пусты, списки участников/операторов/приглашенных — пустые.
+// Default constructor: empty channel with all modes disabled.
 Channel::Channel()
 	: m_name(),
 	  m_topic(),
@@ -59,20 +58,22 @@ Channel& Channel::operator=(const Channel& rhs)
 
 Channel::~Channel() {}
 
-// Устанавливаем топик канала: хранится строка, которую видят участники.
+// Set channel topic string visible to members.
 void Channel::setTopic(const std::string& topic){m_topic = topic;}
 
-// Проверяем, задан ли топик (не пустая строка).
+// Check whether a topic is set (non-empty string).
 bool Channel::hasTopic() const{return !m_topic.empty();}
 
-// Возвращаем имя канала, чтобы сервер мог идентифицировать объект при маршрутизации.
+// Return channel name so the server can route by it.
 const std::string& Channel::getName() const{return m_name;}
 
-// Читаем текущий топик канала для ответов клиентам.
+// Read current topic for replies.
 const std::string& Channel::getTopic() const{return m_topic;}
 
-// Добавляем участника: берем его fd из объекта Client и сохраняем в мапу.
-// Если такой fd уже есть, мы просто обновляем указатель (на случай реконнекта).
+/*
+  Add a member using its fd from Client and store in the map.
+  If fd already exists, update the pointer (covers reconnect cases).
+*/ 
 void Channel::addMember(Client* client)
 {
 	if (!client)
@@ -80,71 +81,71 @@ void Channel::addMember(Client* client)
 	m_members[client->getFD()] = client;
 }
 
-// Удаляем участника по его fd (используется при PART/QUIT). Параллельно снимаем операторские права, если были.
+// Remove a member by fd (used for PART/QUIT) and drop operator rights if present.
 void Channel::removeMember(int fd)
 {
 	m_members.erase(fd);
 	m_operators.erase(fd);
 }
 
-// Проверяем, состоит ли fd в списке участников.
+// Check whether fd is in the member list.
 bool Channel::isMember(int fd) const{return m_members.find(fd) != m_members.end();}
 
-// Отдаем весь список участников (fd -> Client*) для итерации или рассылки.
+// Return full member map (fd -> Client*) for iteration/broadcasts.
 const std::map<int, Client*>& Channel::getMembers() const{return m_members;}
 
-// Проверяем, пустой ли канал (нет участников).
+// Check whether the channel is empty.
 bool Channel::isEmpty() const{return m_members.empty();}
 
-// Делаем пользователя оператором: добавляем его fd в множество операторов.
+// Grant operator status by adding fd to the operator set.
 void Channel::addOperator(int fd){m_operators.insert(fd);}
 
-// Забираем права оператора у пользователя с указанным fd.
+// Revoke operator status for the given fd.
 void Channel::removeOperator(int fd){m_operators.erase(fd);}
 
-// Проверяем, является ли пользователь оператором канала.
+// Check whether a user is an operator of the channel.
 bool Channel::isOperator(int fd) const{return m_operators.find(fd) != m_operators.end();}
 
-// Устанавливаем лимит пользователей +l (0 или меньше = нет лимита).
+// Set user limit +l (0 or less means no limit).
 void Channel::setUserLimit(int limit){m_user_limit = limit;}
 
-// Включаем/выключаем режим +i (invite-only).
+// Toggle invite-only mode +i.
 void Channel::setInviteOnly(bool enable){m_invite_only = enable;}
 
-// Включаем/выключаем защиту топика +t (только операторы могут менять).
+// Toggle topic protection +t (only operators may change it).
 void Channel::setTopicProtected(bool enable){m_topic_protected = enable;}
 
-// Устанавливаем ключ (пароль) на канал для режима +k.
+// Set channel key (password) for mode +k.
 void Channel::setKey(const std::string& key){m_key = key;}
 
-// Снимаем ключ канала (эквивалент -k).
+// Clear the channel key (equivalent to -k).
 void Channel::removeKey(){m_key.clear();}
 
-// Проверяем, включен ли режим +i.
+// Check whether +i is enabled.
 bool Channel::isInviteOnly() const{return m_invite_only;}
 
-// Проверяем, включен ли режим +t.
+// Check whether +t is enabled.
 bool Channel::isTopicProtected() const{return m_topic_protected;}
 
-// Проверяем, установлен ли ключ (непустая строка).
+// Check whether a key is set (non-empty string).
 bool Channel::hasKey() const{return !m_key.empty();}
 
-// Получаем текущий ключ канала.
+// Get current channel key.
 const std::string& Channel::getKey() const{return m_key;}
 
-// Получаем текущий лимит пользователей.
+// Get current user limit.
 int Channel::getUserLimit() const{return m_user_limit;}
 
-// Добавляем пользователя в список приглашенных (для режима +i).
+// Add user fd to the invited set (for +i).
 void Channel::addInvited(int fd){m_invited.insert(fd);}
 
-// Проверяем, есть ли у пользователя приглашение.
+// Check whether a user has an invite.
 bool Channel::isInvited(int fd) const{return m_invited.find(fd) != m_invited.end();}
 
-// Убираем пользователя из списка приглашенных (после входа или revoke).
+// Remove a user from the invited set (after join or revoke).
 void Channel::removeInvited(int fd){m_invited.erase(fd);}
 
-// Рассылаем сообщение всем участникам, опционально исключая отправителя по fd.
+// Broadcast to all members, optionally excluding sender by fd.
 void Channel::broadcast(const std::string& message, int exclude_fd)
 {
 	std::cout << "Broadcasting to " << m_members.size() << " members" << std::endl;
@@ -155,7 +156,6 @@ void Channel::broadcast(const std::string& message, int exclude_fd)
             std::cout << "  Skipping fd " << it->first << std::endl;
             continue;
         }
-        
         std::cout << "  Sending to fd " << it->first << " (" 
                   << it->second->getNickname() << ")" << std::endl;
         it->second->appendToOutBuf(message);

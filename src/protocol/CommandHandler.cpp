@@ -7,9 +7,9 @@
  * according to RFC 1459 specifications.
  */
 
-#include "../../inc/protocol/CommandHandler.hpp"
-#include "../../inc/protocol/Replies.hpp"
-#include "../../inc/network/Server.hpp"
+#include "protocol/CommandHandler.hpp"
+#include "protocol/Replies.hpp"
+#include "network/Server.hpp"
 
 /**
  * @brief Constructor initializes the command handler with server reference

@@ -24,26 +24,23 @@
 class CommandHandler;
 
 /**
- * Класс Server — объект, который должен быть: только один, не копируемый, не перемещаемый. Значит:
- * Default constructor — forbidden (we have custom constructor)
+ * Server is designed as a single, non-copyable, non-movable object:
+ * Default constructor — forbidden (we have a custom constructor)
  * Copy constructor and assignment operator — forbidden
  */
-
 class Server
 {
 	private:
 	int m_listen_fd;
 	bool m_running;
 	std::string m_password;
-	std::vector<pollfd> m_poll_fds; // все дескрипторы, которые отслеживает poll()
-	std::map<int, std::unique_ptr<Client>> m_clients; // переход на std::unique_ptr<Client>  к безопасному и современному C++17.
-	std::map<std::string, std::unique_ptr<Channel>> m_channels; // Каналы по имени, владеем их объектами
+	std::vector<pollfd> m_poll_fds; // all descriptors tracked by poll()
+	std::map<int, std::unique_ptr<Client>> m_clients; // fd→Client; one owner, auto cleanup (whithout delete), no leaks, exception-safe - if cnst/function throws, memory freed automatically
+	std::map<std::string, std::unique_ptr<Channel>> m_channels; // name→Channel; server owns, auto-cleanup on erase/destruction
 	std::unique_ptr<CommandHandler> m_cmd_handler;
 
 	void initSocket(const std::string &port);
-	// обработка событий
 	void acceptClient();
-	// void receiveData(int fd);
 	bool receiveData(int fd);
 	void sendData(int fd);
 	void disconnectClient(int fd);
