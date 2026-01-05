@@ -81,7 +81,7 @@
 | `/join #channel`						| Войти в канал
 | `/part #channel`						| Выйти из канала
 | `/names`								| Показать пользователей в канале
-| `/who #channel`						| WHO запроc
+| `/who #channel`						| WHO запроc 
 | `/whois nick`							| Информация о пользователе
 | `/msg nick text`						| Отправить личное сообщение
 | `/notice nick text`					| Отправить NOTICE
@@ -166,3 +166,46 @@ bob: he<Tab>    → bob: hello (дополнит ник в начале сооб
 ```
 
 ---
+
+
+
+Тестирование от 04.01.2026 в nc
+1. TODO - удалить сообщения на сервере 
+На настоящем сервере эти debug-сообщения не должны быть.
+
+Это промежуточные отладочные (debug) выводы, которые помогали вам во время разработки. Реальный IRC сервер должен работать тихо — без вывода в консоль. Вместо этого логи обычно пишутся в файлы или в syslog.
+
+1. + PRIVMSG между пользователями (личные сообщения как в канале так и просто отправляются/принимаются отлично):
+Bob → nc: PRIVMSG a :Hi Alice!
+Alice должна получить: :bob!bob@localhost PRIVMSG a :Hi Alice!
+---
+Bob → nc: PRIVMSG #test :Hello everyone!
+Все получают: :bob!bob@localhost PRIVMSG #test :Hi everyone!
+
+
+2. + TOPIC (установка/просмотр топика): 
+Alice (оператор): TOPIC #test :Welcome to our channel!
+Bob (не оператор): TOPIC #test :I try to change  (должна быть ошибка если +t / без +t может менять)
+
+3. + MODE (режимы канала):
+Alice: MODE #test +t        (только операторы могут менять топик)
+Alice: MODE #test +i        (invite-only)
+Alice: MODE #test +k secret (установить пароль)
+Alice: MODE #test +l 5      (лимит пользователей)
+Alice: MODE #test +o bob    (дать bob'у права оператора)
+
+4. + KICK (выкинуть пользователя):
+Alice: KICK #test bob :Bad behavior
+Bob должен получить сообщение о kick и выйти из канала
+
+5. + INVITE (пригласить в +i канал):
+Alice: MODE #test +i
+Alice: INVITE bob #test
+Bob: JOIN #test  (должен зайти, т.к. приглашен)
+
+6. + PART (выход из канала):
+Bob: PART #test :Goodbye!
+
+7. + QUIT (отключиться от сервера):
+Bob: QUIT :See you later
+QUIT работает отлично и с сообщением и без при выходе и без enter всем сразу приходит сообщение и происходит выход
