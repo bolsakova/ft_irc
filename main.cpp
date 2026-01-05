@@ -12,7 +12,7 @@ void signalHandler(int signum)
     if (g_server) 
 	{
         std::cout << "\nShutting down server...\n";
-        g_server->stop();
+        g_server->stop(); //Ctrl+C / kill
     }
 }
 
