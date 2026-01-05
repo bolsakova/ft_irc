@@ -1,15 +1,3 @@
-/* ************************************************************************** */
-/*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   Client.cpp                                         :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: aokhapki <aokhapki@student.42.fr>          +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2025/12/05 17:44:59 by aokhapki          #+#    #+#             */
-/*   Updated: 2026/01/05 00:02:16 by aokhapki         ###   ########.fr       */
-/*                                                                            */
-/* ************************************************************************** */
-
 #include "network/Client.hpp"
 
 Client::Client(int fd)
@@ -22,9 +10,9 @@ Client::Client(int fd)
 	  m_authenticated(false),
 	  m_registered(false),
 	  m_peer_closed(false),
-	  m_should_disconnect(false), // init disconnect flag as false
-	  m_quit_reason(""), // no quit reason until requested
-	  m_user_modes("")    // user modes start empty
+	  m_should_disconnect(false),	// init disconnect flag as false
+	  m_quit_reason(""),			// no quit reason until requested
+	  m_user_modes("")				// user modes start empty
 {}
 
 Client::~Client() {}

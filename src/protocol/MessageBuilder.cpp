@@ -1,5 +1,4 @@
 /**
- * @file MessageBuilder.cpp
  * @brief IRC message builder implementation
  * 
  * Implements Message helper methods and MessageBuilder static functions

@@ -1,7 +1,7 @@
 #ifndef COMMANDHANDLER_HPP
 #define COMMANDHANDLER_HPP
 
-#include "../network/Client.hpp"
+#include "network/Client.hpp"
 #include "Parser.hpp"
 #include "MessageBuilder.hpp"
 #include <map>
@@ -13,7 +13,6 @@ class Server;
 class Channel;
 
 /**
- * @file CommandHandler.hpp
  * @brief IRC command dispatcher and handler
  * 
  * Routes parsed IRC messages to appropriate handler functions
@@ -52,15 +51,14 @@ class CommandHandler {
 			bool	isValidChannelName(const std::string& name);
 
 			// response helpers
-			void sendWelcome(Client& client);
-			void sendReply(Client& client, const std::string& reply);
-			void sendError(Client& client, int error_code, const std::string& param, const std::string& message);
-			void sendNumeric(Client& client, int numeric_code, const std::string& message);
-			void broadcastToChannel(Channel& channel, const std::string& message, int exclude_fd = -1);
-
+			void	sendWelcome(Client& client);
+			void	sendReply(Client& client, const std::string& reply);
+			void	sendError(Client& client, int error_code, const std::string& param, const std::string& message);
+			void	sendNumeric(Client& client, int numeric_code, const std::string& message);
+			void	broadcastToChannel(Channel& channel, const std::string& message, int exclude_fd = -1);
 	public:
-			CommandHandler(Server& server, const std::string& password);	// Constructor for command handler
-			~CommandHandler() = default;									// Destructor
+			CommandHandler(Server& server, const std::string& password);		// Constructor for command handler
+			~CommandHandler() = default;										// Destructor
 			// deleted (contains references)
 			CommandHandler(const CommandHandler&) = delete;
 			CommandHandler& operator=(const CommandHandler&) = delete;

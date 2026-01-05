@@ -8,7 +8,6 @@
 #include <stdexcept>
 
 /**
- * @file MessageBuilder.hpp
  * @brief IRC message structures and builder utilities
  * 
  * IRC message format: [:<prefix>] <command> [<params>] [:<trailing>]
@@ -20,20 +19,20 @@
 
 // Parsed IRC message structure
 struct Message {
-	std::string prefix;					// Optional prefix indicating the source of the message
-	std::string command;				// IRC command (always required)
-	std::vector<std::string> params;	// List of parameters (excluding trailing)
-	std::string trailing;				// trailing parameter (optional)
+	std::string					prefix;					// Optional prefix indicating the source of the message
+	std::string					command;				// IRC command (always required)
+	std::vector<std::string>	params;					// List of parameters (excluding trailing)
+	std::string					trailing;				// trailing parameter (optional)
 
-	bool hasPrefix() const;
-	bool hasTrailing() const;
-	size_t getTotalParams() const;
+	bool						hasPrefix() const;
+	bool						hasTrailing() const;
+	size_t						getTotalParams() const;
 };
 
 // IRC message builder for server responses
 class MessageBuilder {
 	private:
-			static std::string	formatCode(int code);				// Format numeric code to 3-digit string (1 -> 001)
+			static std::string	formatCode(int code);						// Format numeric code to 3-digit string (1 -> 001)
 			static void			validateLength(const std::string& message);	// Validate message length (max 512 characters)
 
 	public:

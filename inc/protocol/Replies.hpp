@@ -2,7 +2,6 @@
 #define REPLIES_HPP
 
 /**
- * @file Replies.hpp
  * @brief IRC numeric reply codes
  * 
  * Defines all IRC numeric reply codes used by the server for successful
