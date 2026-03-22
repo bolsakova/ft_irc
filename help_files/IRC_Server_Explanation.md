@@ -119,8 +119,8 @@ while (m_running) {
             if POLLIN: acceptClient()
         else:
             if POLLOUT: sendData()
-            if POLLERR|POLLNVAL: markForDisconnect()
-            if POLLHUP: markPeerClosed(), при пустом outbuf -> markForDisconnect()
+            if POLLERR|POLLNVAL: disconnectClient()
+            if POLLHUP: markPeerClosed(), при пустом outbuf -> disconnectClient()
             if POLLIN: receiveData()
 
     cleanupDisconnectedClients(); // в конце итерации
@@ -133,7 +133,7 @@ while (m_running) {
 - poll() **блокирует** (спит) до тех пор, пока не произойдет событие хотя бы на одном сокете
 - Когда событие происходит, poll() возвращает управление, и мы проверяем, на каких именно дескрипторах что-то случилось
 - При `EINTR` цикл не падает: либо продолжает работу, либо запускает штатный `stop()` (если поднят флаг остановки)
-- Отключения выполняются **отложенно** через `markForDisconnect()` + `cleanupDisconnectedClients()` в конце итерации
+- Отключения выполняются **отложенно**: для POLLHUP вызывается `markPeerClosed()`, а окончательный `disconnectClient()` происходит в `cleanupDisconnectedClients()` в конце итерации (для безопасности при итерации по poll_fds). Ошибки сокета (POLLERR/POLLNVAL) отключаются сразу.
 
 Это называется **event loop** (цикл событий) — классический паттерн для высокопроизводительных сетевых серверов.
 
@@ -314,13 +314,18 @@ IRC протокол требует:
 
 ---
 
-## 11. Отключение клиента: deferred + cleanup
+## 11. Отключение клиента: deferred + immediate
 
-В текущей реализации отключение двухфазное:
+В текущей реализации отключение использует две стратегии:
 
-1. В обработчиках событий/IO клиент **помечается** (`markForDisconnect`, `markPeerClosed`)
-2. В конце итерации event loop вызывается `cleanupDisconnectedClients()`
-3. Уже внутри cleanup вызывается `disconnectClient(fd)` для тех, кого можно безопасно удалить
+**Отложенное отключение (для graceful shutdown)**:
+1. В обработчиках команд клиент помечается через `markForDisconnect(reason)`
+2. В Server loop при POLLHUP вызывается `markPeerClosed()`
+3. В конце итерации event loop вызывается `cleanupDisconnectedClients()` — безопасно удаляет помеченные клиенты
+
+**Немедленное отключение (для ошибок)**:
+1. При POLLERR/POLLNVAL ошибках сокета вызывается `disconnectClient()` напрямую
+2. При recv() возвращает ошибку в receiveData()
 
 Что делает `disconnectClient(fd)`:
 
