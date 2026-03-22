@@ -35,15 +35,11 @@ static void ignore_sigpipe()
 /*
  	This function sets a file descriptor to non-blocking mode.
 	Non-blocking is required for poll()/epoll() architecture without hanging/blocking or freezing the program.
-	fcntl(fd, F_GETFL) -> get current flags
-	fcntl(fd, F_SETFL) -> set new flags
+	As per subject requirements: fcntl(fd, F_SETFL, O_NONBLOCK) - any other use is forbidden.
 */
 static int set_non_blocking(int fd)
 {
-	int flags = fcntl(fd, F_GETFL, 0);
-	if (flags < 0)
-		return -1;
-	if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0)
+	if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
 		return -1;
 	return 0;
 }
