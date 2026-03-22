@@ -44,7 +44,7 @@ Why buffering matters:
 - Single-threaded event loop with `poll()`.
 - Non-blocking sockets (`O_NONBLOCK`) for listener and clients.
 - Multiple clients handled in one loop.
-- Deferred disconnect strategy (`markForDisconnect` + cleanup pass) to avoid container mutation hazards during iteration.
+- Deferred cleanup for graceful shutdown: clients marked (via `markPeerClosed()` or `markForDisconnect()`) are removed in cleanup pass to avoid container mutation during iteration.
 - Server-only scope (no server-to-server links).
 
 ---
