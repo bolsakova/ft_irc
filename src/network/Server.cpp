@@ -273,7 +273,7 @@ void Server::acceptClient()
 		pfd.fd = client_fd;
 		pfd.events = POLLIN;  // start with only read events
 		pfd.revents = 0;
-		m_poll_fds.push_back(pfd);//push_back копирует структуру pollfd и добавляет в вектор
+		m_poll_fds.push_back(pfd);//push_back copies the pollfd structure and adds it to the vector
 		m_clients.emplace(client_fd, std::make_unique<Client>(client_fd)); //without copy constructor
 		// std::cout << "New client accepted, fd = " << client_fd << std::endl;
 	}
