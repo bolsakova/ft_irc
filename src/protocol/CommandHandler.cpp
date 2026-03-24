@@ -1469,20 +1469,23 @@ void CommandHandler::handleChannelMode(Client& client, const Message& msg, const
 				if (action == '+')
 				{
 					// Need key parameter
-					if (param_index < msg.params.size())
+					if (param_index >= msg.params.size())
 					{
-						std::string key = msg.params[param_index++];
-						chan->setKey(key);
-	
-						// Add to applied modes string
-						if (current_action != action)
-						{
-							applied_modes += action;
-							current_action = action;
-						}
-						applied_modes += 'k';
-						applied_params.push_back(key);
+						sendError(client, ERR_NEEDMOREPARAMS, "MODE", "Not enough parameters");
+            			break;
 					}
+
+					std::string key = msg.params[param_index++];
+					chan->setKey(key);
+
+					// Add to applied modes string
+					if (current_action != action)
+					{
+						applied_modes += action;
+						current_action = action;
+					}
+					applied_modes += 'k';
+					applied_params.push_back(key);
 				}
 				else
 				{
@@ -1503,84 +1506,88 @@ void CommandHandler::handleChannelMode(Client& client, const Message& msg, const
 			{
 				// Operator privileges mode
 				// Need nickname parameter for both + and -
-				std::string target_nick;
-				if (param_index < msg.params.size())
+				if (param_index >= msg.params.size())
 				{
-					target_nick = msg.params[param_index++];
-					Client* target_client = nullptr;
-					int target_fd = -1;
+					sendError(client, ERR_NEEDMOREPARAMS, "MODE", "Not enough parameters");
+        			break;
+				}
 
-					const std::map<int, Client*>& members = chan->getMembers();
-					for (std::map<int, Client*>::const_iterator it = members.begin();
-                        it != members.end(); ++it)
+				std::string target_nick = msg.params[param_index++];
+				Client* target_client = NULL;
+				int target_fd = -1;
+
+				const std::map<int, Client*>& members = chan->getMembers();
+				for (std::map<int, Client*>::const_iterator it = members.begin();
+					it != members.end(); ++it)
+				{
+					if (it->second->getNickname() == target_nick)
 					{
-						if (it->second->getNickname() == target_nick)
+						target_client = it->second;
+						target_fd = it->first;
+						break;
+					}
+				}
+				if (target_client && chan->isMember(target_fd))
+				{
+					if (action == '+')
+					{
+						if (!chan->isOperator(target_fd))
 						{
-							target_client = it->second;
-							target_fd = it->first;
-							break;
+							chan->addOperator(target_fd);
+							if (current_action != action)
+							{
+								applied_modes += action;
+								current_action = action;
+							}
+							applied_modes += 'o';
+							applied_params.push_back(target_nick);
 						}
 					}
-
-					if (target_client && chan->isMember(target_fd))
+					else
 					{
-						if (action == '+')
+						if (chan->isOperator(target_fd))
 						{
-							if (!chan->isOperator(target_fd))
+							chan->removeOperator(target_fd);
+							if (current_action != action)
 							{
-								chan->addOperator(target_fd);
-								if (current_action != action)
-								{
-									applied_modes += action;
-									current_action = action;
-								}
-								applied_modes += 'o';
-								applied_params.push_back(target_nick);
+								applied_modes += action;
+								current_action = action;
 							}
-						}
-						else
-						{
-							if (chan->isOperator(target_fd))
-							{
-								chan->removeOperator(target_fd);
-								if (current_action != action)
-								{
-									applied_modes += action;
-									current_action = action;
-								}
-								applied_modes += 'o';
-								applied_params.push_back(target_nick);
-							}
+							applied_modes += 'o';
+							applied_params.push_back(target_nick);
 						}
 					}
 				}
 				break;
 			}
+
 			case 'l':
 			{
 				// User limit mode
 				if (action == '+')
 				{
 					// Need limit parameter
-					if (param_index < msg.params.size())
+					if (param_index >= msg.params.size())
 					{
-						std::string limit_str = msg.params[param_index++];
-		
-						// Convert string to int
-						std::istringstream iss(limit_str);
-						int new_limit;
-						if (iss >> new_limit && new_limit > 0)
+						sendError(client, ERR_NEEDMOREPARAMS, "MODE", "Not enough parameters");
+            			break;
+					}
+					std::string limit_str = msg.params[param_index++];
+	
+					// Convert string to int
+					std::istringstream iss(limit_str);
+					int new_limit;
+					if (iss >> new_limit && new_limit > 0)
+					{
+						chan->setUserLimit(new_limit);
+						// Add to applied modes string
+						if (current_action != action)
 						{
-							chan->setUserLimit(new_limit);
-							// Add to applied modes string
-							if (current_action != action)
-							{
-								applied_modes += action;
-								current_action = action;
-							}
-							applied_modes += 'l';
-							applied_params.push_back(limit_str);
+							applied_modes += action;
+							current_action = action;
 						}
+						applied_modes += 'l';
+						applied_params.push_back(limit_str);
 					}
 				}
 				else
