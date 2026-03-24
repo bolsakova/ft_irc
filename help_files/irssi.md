@@ -4,142 +4,142 @@
 
 ## Window/Channel navigation
 
-| Клавиша 			| Действие
-|-------------------|-------------------
-| `Alt+1` до `Alt+9`| Переключение на окно 1-9
-| `Alt+0`			| Переключение на окно 10
-| `Alt+Q` до `Alt+O`| Переключение на окна 11-19
-| `Ctrl+N`			| Следующее окно
-| `Ctrl+P`			| Предыдущее окно
-| `Alt+A`			| Перейти к окну с активностью (новые сообщения)
-| `/window 3`		| Перейти к окну номер 3
+| Клавиша 			     | Action
+|------------------------|-------------------
+| from `Alt+1` to `Alt+9`| Switch to windows 1-9
+| `Alt+0`			     | Switch to window 10
+| `Alt+Q` до `Alt+O`     | Switch to windows 11-19
+| `Ctrl+N`			     | Next window
+| `Ctrl+P`			     | Previous window
+| `Alt+A`			     | Switch to active window (new messages)
+| `/window 3`		     | Switch to window 3
 
 ---
 
 ## Text editing
 
-| Клавиша			| Действие
+| Key			    | Action
 |-------------------|-------------------
-| `Ctrl+A`			| В начало строки
-| `Ctrl+E`			| В конец строки
-| `Ctrl+U`			| Удалить от курсора до начала
-| `Ctrl+K`			| Удалить от курсора до конца
-| `Ctrl+W`			| Удалить слово назад
-| `Ctrl+Y`			| Вставить последний удаленный текст
-| `Alt+Backspace`	| Удалить слово назад
-| `Alt+D`			| Удалить слово вперед
-| `Tab`				| Автодополнение ника/команды
+| `Ctrl+A`			| Beginning of the string
+| `Ctrl+E`			| End of the string
+| `Ctrl+U`			| Remove from cursor to beginning
+| `Ctrl+K`			| Remove from cursor to the end
+| `Ctrl+W`			| Remove word back
+| `Ctrl+Y`			| Insert last removed text
+| `Alt+Backspace`	| Remove word back
+| `Alt+D`			| Remove word forward
+| `Tab`				| Auto-addition nick/command
 
 
 ---
 
 ## History scrolling
 
-| Клавиша				| Действие
-|-----------------------|-----------------------
-| `Page Up`				| Прокрутка вверх
-| `Page Down`			| Прокрутка вниз
-| `Ctrl+Home`			| В начало буфера
-| `Ctrl+End`			| В конец буфера (к новым сообщениям)
-| `↑` (стрелка вверх)	| Предыдущая команда из истории
-| `↓` (стрелка вниз)	| Следующая команда из истории
+| Key				| Action
+|-------------------|-----------------------
+| `Page Up`			| Scrolling up
+| `Page Down`		| Scrolling down
+| `Ctrl+Home`		| Buffer beginning
+| `Ctrl+End`		| Buffer end (to new messages)
+| `↑` (arrow up)	| Previous command from history
+| `↓` (arrow down)	| Next command from history
 
 ---
 
 ## Manage windows
 
-| Клавиша				| Действие
+| Key				    | Action
 |-----------------------|-----------------------
-| `Ctrl+L`				| Обновить экран (redraw)
-| `/clear`				| Очистить текущее окно
-| `/window close`		| Закрыть текущее окно
-| `/window new`			| Создать новое окно
-| `/window name <name>` | Назвать окно
+| `Ctrl+L`				| Update screen (redraw)
+| `/clear`				| Clear current window
+| `/window close`		| Close current window
+| `/window new`			| Create new window
+| `/window name <name>` | Name the window
 
 ---
 
-## Специальные функции
+## Special functions
 
-| Клавиша			| Действие
+| Key			    | Action
 |-------------------|-------------------
-| `Alt+X`			| Переключить строку ввода (скрыть/показать)
-| `Ctrl+B`			| Вставить код форматирования (bold)
-| `Ctrl+C`			| Вставить код цвета
-| `Ctrl+_`			| Вставить код подчеркивания
-| `Ctrl+]`			| Вставить код italic
-| `Ctrl+Z`			| Suspend irssi (вернуться: `fg`)
+| `Alt+X`			| Switch input string (hide/show)
+| `Ctrl+B`			| Insert format code (bold)
+| `Ctrl+C`			| Insert color code
+| `Ctrl+_`			| Insert underline code
+| `Ctrl+]`			| Insert italic code
+| `Ctrl+Z`			| Suspend irssi (return: `fg`)
 
 ---
 
-## Полезные команды для тестирования
+## Useful commands for testing
 
-| Команда								| Описание
+| Command								| Action
 |---------------------------------------|---------------------------------------
-| `/connect localhost 6667 pass nick`	| Подключиться к серверу
-| `/disconnect`							| Отключиться от текущего сервера
-| `/reconnect`							| Переподключиться
-| `/join #channel`						| Войти в канал
-| `/part #channel`						| Выйти из канала
-| `/names`								| Показать пользователей в канале
-| `/who #channel`						| WHO запроc 
-| `/whois nick`							| Информация о пользователе
-| `/msg nick text`						| Отправить личное сообщение
-| `/notice nick text`					| Отправить NOTICE
-| `/query nick`							| Открыть личное окно с пользователем
-| `/topic #channel New topic`			| Установить топик
-| `/kick #channel nick reason`			| Выкинуть пользователя
-| `/invite nick #channel`				| Пригласить
-| `/mode #channel +i`					| Установить режим канала
-| `/mode nick +i`						| Установить режим пользователя
-| `/away reason`						| Установить away статус
-| `/away`								| Убрать away статус
-| `/quit message`						| Выйти из irssi
-| `/exit`								| То же что /quit
+| `/connect localhost 6667 pass nick`	| Connect to server
+| `/disconnect`							| Disconnect from current server
+| `/reconnect`							| Reconnect
+| `/join #channel`						| Join to the channel
+| `/part #channel`						| Leave the channel
+| `/names`								| show users in channel
+| `/who #channel`						| WHO request 
+| `/whois nick`							| Info about user
+| `/msg nick text`						| Send private message
+| `/notice nick text`					| Send NOTICE
+| `/query nick`							| Open private window with user
+| `/topic #channel New topic`			| Set topic
+| `/kick #channel nick reason`			| Kick user
+| `/invite nick #channel`				| Invite user to the channel
+| `/mode #channel +i`					| Set channel mode
+| `/mode nick +i`						| Set user mode
+| `/away reason`						| Set away reason
+| `/away`								| Remove away reason
+| `/quit message`						| Quit from irssi
+| `/exit`								| The same as /quit
 
 ---
 
-## Управление настройками
+## Settings management
 
-| Команда						| Описание
+| Command						| Action
 |-------------------------------|-------------------------------
-| `/set`						| Показать все настройки
-| `/set nick alice`				| Установить ник по умолчанию
-| `/set real_name Alice Cooper`	| Установить реальное имя
-| `/save`						| Сохранить конфигурацию
-| `/reload`						| Перезагрузить конфигурацию
-| `/help command`				| Справка по команде
+| `/set`						| Show all settings
+| `/set nick alice`				| Set nick
+| `/set real_name Alice Cooper`	| Set real name
+| `/save`						| Save configuration
+| `/reload`						| Reload configuration
+| `/help command`				| Command helper
 
 ---
 
-## Горячие клавиши для WSL/Linux
+## Hot keys for WSL/Linux
 
-| Комбинация		| Действие
+| Key		        | Action
 |-------------------|-------------------
-| `Shift+Insert`	| Вставить из буфера обмена
-| `Ctrl+Shift+C`	| Копировать (в некоторых терминалах)
-| `Ctrl+Shift+V`	| Вставить (в некоторых терминалах)
+| `Shift+Insert`	| Insert from buffer
+| `Ctrl+Shift+C`	| Copy (in some terminals)
+| `Ctrl+Shift+V`	| Insert (in some terminals)
 
 ---
 
-## Полезные советы
+## Useful tipps
 
-### Быстрое переключение между каналами:
+### Quick switch between channels:
 ```
-Alt+1  - Окно статуса сервера
-Alt+2  - Обычно первый канал (#test)
-Alt+3  - Второй канал
+Alt+1  - Window with server status
+Alt+2  - Usually 1st channel (#test)
+Alt+3  - 2nd channel
 ```
 
-### Автодополнение:
+### Autocomplete:
 ```
 /j #te<Tab>     → /join #test
-bob: he<Tab>    → bob: hello (дополнит ник в начале сообщения)
+bob: he<Tab>    → bob: hello (complete nick in the beginning of the message)
 ```
 
-### Открыть личный чат:
+### Open private chat:
 ```
 /query bob
-# Теперь просто пишите в это окно, автоматически будет PRIVMSG bob
+# Now just write in that window, PRIVMSG bob appears automatically
 ```
 
 ### Режим paste (для многострочного текста):
