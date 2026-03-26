@@ -232,7 +232,7 @@ void Server::initSocket(const std::string &port_str)
 		close(m_listen_fd);
 		throw std::runtime_error("set_non_blocking() failed: " + std::string(strerror(errno)));
 	}
-	// std::cout << "Listening on port " << port << " (non-blocking)" << std::endl;
+	// std::cout << "DEBAG Listening on port " << port << " (non-blocking)" << std::endl;
 }
 
 
@@ -275,7 +275,7 @@ void Server::acceptClient()
 		pfd.revents = 0;
 		m_poll_fds.push_back(pfd);//push_back copies the pollfd structure and adds it to the vector
 		m_clients.emplace(client_fd, std::make_unique<Client>(client_fd)); //without copy constructor
-		// std::cout << "New client accepted, fd = " << client_fd << std::endl;
+		// std::cout << "DEBAG New client accepted, fd = " << client_fd << std::endl;
 	}
 }
 
@@ -298,7 +298,7 @@ void Server::disconnectClient(int fd)
 		close(fd);
 
 	m_clients.erase(fd);
-	// std::cout << "Client fd " << fd << " disconnected and removed." << std::endl;
+	// std::cout << "DEBAG Client fd " << fd << " disconnected and removed." << std::endl;
 }
 
 /*
@@ -378,7 +378,7 @@ bool Server::receiveData(int fd)
 		}
 		if (bytes_read == 0)
 		{
-			// std::cout << "Client fd " << fd << " closed input (EOF).\n";
+			// std::cout << "DEBAG Client fd " << fd << " closed input (EOF).\n";
 			auto it = m_clients.find(fd);
 			if (it == m_clients.end())
 				return false;
@@ -439,7 +439,7 @@ void Server::sendData(int fd)
 	if (!client.hasDataToSend())
 	{
 		disablePolloutForFd(fd);
-		// Проверить, помечен ли клиент для отключения ПОСЛЕ отправки буфера
+		// Check whether client is marked for disconnect AFTER buffer is sent
         if (client.shouldDisconnect())
         {
             disconnectClient(fd);
@@ -476,7 +476,7 @@ void Server::sendData(int fd)
     if (!client.hasDataToSend())
     {
         disablePolloutForFd(fd);
-        // Отключить клиента ПОСЛЕ отправки всех данных
+		// Disconnect client AFTER all pending data is sent
         if (client.shouldDisconnect() || client.isPeerClosed())
         {
             disconnectClient(fd);
@@ -533,7 +533,7 @@ void Server::run()
                     disconnectClient(client_fd);
                     continue;
                 }
-				// POLLHUP — клиент закрыл соединение, но мы можем ещё отправить данные
+				// POLLHUP - client closed connection, but we may still send pending data
                 if (m_poll_fds[i].revents & POLLHUP)
                 {
                     auto it = m_clients.find(client_fd);
@@ -541,13 +541,13 @@ void Server::run()
                     {
                         Client& client = *(it->second);
                         client.markPeerClosed();
-                        // Если есть данные для отправки — не отключать сразу
+						// If there is data to send, do not disconnect immediately
                         if (!client.hasDataToSend())
                         {
                             disconnectClient(client_fd);
                             continue;
                         }
-                        // Иначе отключим после отправки в sendData
+						// Otherwise disconnect after sending in sendData
                     }
                     else
                     {
