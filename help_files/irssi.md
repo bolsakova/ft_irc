@@ -171,13 +171,13 @@ bob: he<Tab>    → bob: hello (complete nick in the beginning of the message)
 
 Тестирование от 24.03.2026 в nc
 
-1) MODE #ops +k 
+1) MODE #ops +k - исправлено 27/03
 => нет ответа, тихий баг (должна выводиться 461 Not enough parameters ошибка по RFC)
 
-2) MODE #ops +l 
+2) MODE #ops +l - исправлено 27/03
 => нет ответа, тихий баг (должна выводиться 461 Not enough parameters ошибка по RFC)
 
-3) MODE #ops +o
+3) MODE #ops +o - исправлено 27/03
 => нет ответа, тихий баг (должна выводиться 461 Not enough parameters ошибка по RFC)
 
 4) Для NC команда QUIT:
@@ -185,9 +185,20 @@ bob: he<Tab>    → bob: hello (complete nick in the beginning of the message)
  - тест без интерактива
  printf 'PASS pass42\r\nNICK t1\r\nUSER t1 0 * :T1\r\nQUIT :bye\r\n' | nc -C -w 2 127.0.0.1 6667
 
+ - ---Alima--- добавлен sleep 1 чтобы успел вывести напечать в териминале
+ { printf 'PASS pass42\r\nNICK t1\r\nUSER t1 0 * :T1\r\nQUIT :bye\r\n'; sleep 1; } | nc -C 127.0.0.1 6671 
+
  - тест с интерактивом
  В интерактивном nc после QUIT закрывай stdin через Ctrl+D, а не Enter/пробел.
 
+---Alima---
+после QUIT :bye сервер корректно закрыл сокет,
+твой nc завершился сам, как и должен.
+Фраза про Ctrl+D — это не “обязательное правило”, а запасной совет для случаев, когда конкретный nc/терминал не закрывается сразу (такое бывает в других окружениях).
+
+То есть правильнее написать так:
+
+“Если после QUIT сессия не закрылась автоматически, нажмите Ctrl+D для закрытия stdin.”
 
 ---
 
